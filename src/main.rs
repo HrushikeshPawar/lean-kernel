@@ -1,69 +1,47 @@
-use lean_kernel::Term::*;
-use lean_kernel::Type::*;
+use serde_json::Value;
+use std::{
+    io::{self, BufRead},
+    process::ExitCode,
+};
 
-fn main() {
-    // println!("λ.0 => {:?}", Lambda(Box::new(Index(0))));
-    // println!(
-    //     "λ.λ.1 => {:?}",
-    //     Lambda(Box::new(Lambda(Box::new(Index(1)))))
-    // );
-    // println!(
-    //     "λ.λ.(1 0) => {:?}",
-    //     Lambda(Box::new(Lambda(Box::new(Application(
-    //         Box::new(Index(1)),
-    //         Box::new(Index(0))
-    //     )))))
-    // );
-    // println!(
-    //     "(λ.0)(λ.0) => {:?}",
-    //     Application(
-    //         Box::new(Lambda(Box::new(Index(0)))),
-    //         Box::new(Lambda(Box::new(Index(0))))
-    //     )
-    // );
+fn main() -> ExitCode {
+    let stdin = io::stdin();
 
-    // let id_function = Lambda(Box::new(Index(0)));
-    // println!("Nodes in ID function: {}", id_function.count_nodes()); // Outputs: 2
+    for (line_index, line_result) in stdin.lock().lines().enumerate() {
+        let Some(line_number) = line_index.checked_add(1) else {
+            eprintln!("Overflow at line index: {line_index}");
+            return ExitCode::from(3);
+        };
 
-    // let sample_function = Lambda(Box::new(Lambda(Box::new(Application(
-    //     Box::new(Index(0)),
-    //     Box::new(Index(1)),
-    // )))));
-    // println!(
-    //     "Nodes in sample function [λ.λ.(0 1)]: {}",
-    //     sample_function.count_nodes()
-    // );
+        let line = match line_result {
+            Ok(line) => line,
+            Err(error) => {
+                eprintln!("I/O error on line {line_number}: {error}");
+                return ExitCode::from(3);
+            }
+        };
 
-    // Shift
-    let sample_term_1 = Lambda(
-        Base,
-        Box::new(Application(Box::new(Index(1)), Box::new(Index(0)))),
-    );
-    println!("Shift Term `λ.(1 0)` by amount=1 and cutoff=0 -> {:?}", {
-        sample_term_1.shift(1, 0)
-    });
+        if line.trim().is_empty() {
+            continue;
+        }
 
-    let sample_term_2 = Lambda(
-        Base,
-        Box::new(Lambda(
-            Base,
-            Box::new(Application(
-                Box::new(Application(Box::new(Index(2)), Box::new(Index(1)))),
-                Box::new(Index(0)),
-            )),
-        )),
-    );
-    println!(
-        "Shift Term `λ.λ.((2 1) 0)` by amount=1 and cutoff=0 -> {:?}",
-        { sample_term_2.shift(1, 0) }
-    );
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("Invalide JSON on line {line_number}: {error}");
+                return ExitCode::from(3);
+            }
+        };
 
-    let sample_term_3 = Application(Box::new(Index(1)), Box::new(Index(0)));
-    println!("Shift Term `(1 0)` by amount=2 and cutoff=0 -> {:?}", {
-        sample_term_3.shift(2, 0)
-    });
+        let Some(object) = value.as_object() else {
+            eprintln!("Expected JSON object on line {line_number}");
+            return ExitCode::from(3);
+        };
 
-    // Type
-    let identity = Lambda(Base, Box::new(Index(0)));
-    println!("{identity:?}");
+        let keys: Vec<&str> = object.keys().map(String::as_str).collect();
+        eprintln!("line {line_number}: {keys:?}");
+    }
+
+    // Input was syntatically understandable, but we are not yet claiming that we can check it.
+    ExitCode::from(2)
 }
