@@ -4,6 +4,8 @@ use std::{
     process::ExitCode,
 };
 
+mod export;
+
 fn main() -> ExitCode {
     let stdin = io::stdin();
 
@@ -28,20 +30,28 @@ fn main() -> ExitCode {
         let value: Value = match serde_json::from_str(&line) {
             Ok(value) => value,
             Err(error) => {
-                eprintln!("Invalide JSON on line {line_number}: {error}");
+                eprintln!("Invalid JSON on line {line_number}: {error}");
                 return ExitCode::from(3);
             }
         };
 
-        let Some(object) = value.as_object() else {
-            eprintln!("Expected JSON object on line {line_number}");
-            return ExitCode::from(3);
-        };
+        match export::parse_supported_record(value) {
+            Ok(Some(record)) => {
+                eprintln!("line {line_number}: {record:?}");
+            }
 
-        let keys: Vec<&str> = object.keys().map(String::as_str).collect();
-        eprintln!("line {line_number}: {keys:?}");
+            Ok(None) => {
+                eprintln!("Unsupported export record on line {line_number}");
+                return ExitCode::from(2);
+            }
+
+            Err(error) => {
+                eprintln!("Malformed export record on line {line_number}: {error}");
+                return ExitCode::from(3);
+            }
+        }
     }
 
-    // Input was syntatically understandable, but we are not yet claiming that we can check it.
+    // Input was syntactically understandable, but we are not yet claiming that we can check it.
     ExitCode::from(2)
 }
