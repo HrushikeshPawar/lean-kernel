@@ -8,6 +8,7 @@ use crate::{
 
 pub fn run(reader: impl BufRead) -> ExitCode {
     let mut state = import::ImportState::new();
+    let mut checked_definition = false;
 
     for (line_index, line_result) in reader.lines().enumerate() {
         let Some(line_number) = line_index.checked_add(1) else {
@@ -98,8 +99,7 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                             let check_status = definition.check();
                             match check_status {
                                 Ok(true) => {
-                                    println!("Definition is valid");
-                                    return ExitCode::from(0);
+                                    checked_definition = true;
                                 }
                                 Ok(false) => {
                                     eprintln!("Definition is invalid");
@@ -145,6 +145,58 @@ pub fn run(reader: impl BufRead) -> ExitCode {
         }
     }
 
-    // Input was syntactically understandable, but we are not yet claiming that we can check it.
-    ExitCode::from(2)
+    if checked_definition {
+        println!("Definition is valid");
+        ExitCode::from(0)
+    } else {
+        ExitCode::from(2)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::driver::run;
+    use std::{io::Cursor, process::ExitCode};
+    #[test]
+    fn valid_definition_does_not_hide_later_unsupported_record() {
+        let input = concat!(
+            r#"{"in":1,"str":{"pre":0,"str":"first"}}"#,
+            "\n",
+            r#"{"il":1,"succ":0}"#,
+            "\n",
+            r#"{"ie":0,"sort":1}"#,
+            "\n",
+            r#"{"ie":1,"sort":0}"#,
+            "\n",
+            r#"{"def":{"all":[1],"hints":"opaque","levelParams":[],"name":1,"safety":"safe","type":0,"value":1}}"#,
+            "\n",
+            r#"{"ie":2,"mystery":0}"#,
+            "\n",
+        );
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(2));
+    }
+
+    #[test]
+    fn valid_first_definition_does_not_hide_invalid_second_definition() {
+        let input = concat!(
+            r#"{"in":1,"str":{"pre":0,"str":"first"}}"#,
+            "\n",
+            r#"{"in":2,"str":{"pre":0,"str":"second"}}"#,
+            "\n",
+            r#"{"il":1,"succ":0}"#,
+            "\n",
+            r#"{"ie":0,"sort":1}"#,
+            "\n",
+            r#"{"ie":1,"sort":0}"#,
+            "\n",
+            // first : Type := Prop     -- valid
+            r#"{"def":{"all":[1],"hints":"opaque","levelParams":[],"name":1,"safety":"safe","type":0,"value":1}}"#,
+            "\n",
+            // second : Prop := Prop    -- invalid, because Prop : Type
+            r#"{"def":{"all":[2],"hints":"opaque","levelParams":[],"name":2,"safety":"safe","type":1,"value":1}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(1));
+    }
 }
