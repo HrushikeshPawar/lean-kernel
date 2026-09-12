@@ -5,12 +5,7 @@ use crate::export::LevelSuccRecord;
 use crate::export::{DefinitionHints, DefinitionRecord, Safety};
 use crate::export::{NameNumRecord, NameStrRecord};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Name {
-    Anonymous,
-    Str(Box<Name>, String),
-    Num(Box<Name>, usize),
-}
+pub use crate::kernel::{LeanDefinition, LeanExpr, Level, Name};
 
 #[derive(Debug)]
 pub struct NameTable {
@@ -68,13 +63,6 @@ impl NameTable {
         self.names.get(index)
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Level {
-    Zero,
-    Succ(Box<Level>),
-}
-
 #[derive(Debug)]
 pub struct LevelTable {
     levels: Vec<Level>,
@@ -110,109 +98,10 @@ impl LevelTable {
         self.levels.get(id)
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum LeanExpr {
-    Sort(Level),
-    BVar(usize),
-    Pi(Box<LeanExpr>, Box<LeanExpr>),
-}
-
 #[derive(Debug)]
 pub struct ExprTable {
     exprs: Vec<LeanExpr>,
 }
-
-fn imax(u: &Level, v: &Level) -> Level {
-    fn max_level(u: &Level, v: &Level) -> Level {
-        match (u, v) {
-            (Level::Zero, v) => v.clone(),
-            (u, Level::Zero) => u.clone(),
-            (Level::Succ(u_prev), Level::Succ(v_prev)) => {
-                Level::Succ(Box::new(max_level(u_prev, v_prev)))
-            }
-        }
-    }
-
-    match v {
-        Level::Zero => Level::Zero,
-        _ => max_level(u, v),
-    }
-}
-
-fn lookup_bvar_type(context: &[LeanExpr], index: usize) -> Result<LeanExpr, String> {
-    let stored = context
-        .get(index)
-        .ok_or_else(|| format!("Bound variable #{index} is out of scope"))?;
-
-    let distance = index
-        .checked_add(1)
-        .ok_or_else(|| "Bound variable lookup distance overflow".to_string())?;
-
-    stored.lift(distance, 0)
-}
-
-impl LeanExpr {
-    pub fn lift(&self, amount: usize, cutoff: usize) -> Result<LeanExpr, String> {
-        match self {
-            LeanExpr::Sort(level) => Ok(LeanExpr::Sort(level.clone())),
-
-            LeanExpr::BVar(index) => {
-                if *index < cutoff {
-                    Ok(LeanExpr::BVar(*index))
-                } else {
-                    index
-                        .checked_add(amount)
-                        .map(LeanExpr::BVar)
-                        .ok_or_else(|| "Index overflow during lift".to_string())
-                }
-            }
-
-            LeanExpr::Pi(domain, body) => {
-                // domain uses same cutoff
-                let lifted_domain = domain.lift(amount, cutoff)?;
-                // body uses cutoff + 1
-                let new_cutoff = cutoff
-                    .checked_add(1)
-                    .ok_or_else(|| "Cutoff overflow during lift".to_string())?;
-                let lifted_body = body.lift(amount, new_cutoff)?;
-
-                Ok(LeanExpr::Pi(Box::new(lifted_domain), Box::new(lifted_body)))
-            }
-        }
-    }
-
-    pub fn infer_type_with_context(&self, context: &[LeanExpr]) -> Result<LeanExpr, String> {
-        match self {
-            LeanExpr::Sort(level) => {
-                let next_level = Level::Succ(Box::new(level.clone()));
-                Ok(LeanExpr::Sort(next_level))
-            }
-            LeanExpr::Pi(domain, body) => {
-                let domain_type = domain.infer_type_with_context(context)?;
-
-                let mut new_context = Vec::with_capacity(context.len() + 1);
-                new_context.push(*domain.clone());
-                new_context.extend_from_slice(context);
-                let body_type = body.infer_type_with_context(&new_context)?;
-
-                match (domain_type, body_type) {
-                    (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
-                        let result_level = imax(&level1, &level2);
-                        Ok(LeanExpr::Sort(result_level))
-                    }
-                    _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
-                }
-            }
-            LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
-        }
-    }
-
-    pub fn infer_type(&self) -> Result<LeanExpr, String> {
-        self.infer_type_with_context(&[])
-    }
-}
-
 impl ExprTable {
     pub fn new() -> Self {
         ExprTable { exprs: Vec::new() }
@@ -316,33 +205,6 @@ impl ExprTable {
         self.exprs.get(id)
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LeanDefinition {
-    pub name: Name,
-    pub ty: LeanExpr,
-    pub value: LeanExpr,
-}
-
-impl LeanDefinition {
-    pub fn check(&self) -> Result<bool, String> {
-        // 1. Infer the type of self.ty.
-        let inferred_ty_type = self.ty.infer_type()?;
-
-        // 2. Make sure that inferred result is a LeanExpr::Sort(_).
-        //    If it isn't, the declaration's annotation is not itself a type.
-        if !matches!(inferred_ty_type, LeanExpr::Sort(_)) {
-            return Ok(false);
-        }
-        // 3. Infer the type of self.value.
-        let inferred_value_type = self.value.infer_type()?;
-
-        // 4. Compare that inferred type with self.ty.
-        // Return Ok(true) / Ok(false).
-        Ok(inferred_value_type == self.ty)
-    }
-}
-
 pub fn reconstruct_definition(
     record: &DefinitionRecord,
     names: &NameTable,
@@ -394,7 +256,6 @@ impl ImportState {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -779,54 +640,6 @@ mod tests {
     }
 
     #[test]
-    fn prop_has_type_type() {
-        let prop = LeanExpr::Sort(Level::Zero);
-
-        assert_eq!(
-            prop.infer_type(),
-            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
-        );
-    }
-
-    #[test]
-    fn type_has_next_universe_as_type() {
-        let type_zero = LeanExpr::Sort(Level::Succ(Box::new(Level::Zero)));
-
-        assert_eq!(
-            type_zero.infer_type(),
-            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Succ(
-                Box::new(Level::Zero)
-            )))))
-        );
-    }
-
-    #[test]
-    fn basic_def_is_valid() {
-        let definition = LeanDefinition {
-            name: Name::Str(Box::new(Name::Anonymous), "basicDef".to_string()),
-            ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))),
-            value: LeanExpr::Sort(Level::Zero),
-        };
-
-        assert_eq!(definition.check(), Ok(true));
-    }
-
-    #[test]
-    fn definition_rejects_value_with_wrong_type() {
-        let definition = LeanDefinition {
-            name: Name::Str(Box::new(Name::Anonymous), "bad".to_string()),
-
-            // Claims: bad : Prop
-            ty: LeanExpr::Sort(Level::Zero),
-
-            // But Prop : Type, not Prop.
-            value: LeanExpr::Sort(Level::Zero),
-        };
-
-        assert_eq!(definition.check(), Ok(false));
-    }
-
-    #[test]
     fn reconstructs_forall_expression() {
         let mut names = NameTable::new();
 
@@ -921,33 +734,6 @@ mod tests {
     }
 
     #[test]
-    fn prop_to_prop_pi_has_type_type() {
-        let prop = LeanExpr::Sort(Level::Zero);
-
-        let pi = LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop));
-
-        assert_eq!(
-            pi.infer_type(),
-            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
-        );
-    }
-
-    #[test]
-    fn imax_is_zero_when_second_level_is_zero() {
-        let one = Level::Succ(Box::new(Level::Zero));
-
-        assert_eq!(imax(&one, &Level::Zero), Level::Zero);
-    }
-
-    #[test]
-    fn imax_uses_max_when_second_level_is_nonzero() {
-        let one = Level::Succ(Box::new(Level::Zero));
-        let two = Level::Succ(Box::new(one.clone()));
-
-        assert_eq!(imax(&two, &one), two);
-    }
-
-    #[test]
     fn forall_expression_rejects_unknown_body_expression() {
         let mut names = NameTable::new();
 
@@ -1024,71 +810,5 @@ mod tests {
         exprs.add_bvar(&record).unwrap();
 
         assert_eq!(exprs.get(1), Some(&LeanExpr::BVar(99)));
-    }
-
-    #[test]
-    fn bvar_zero_gets_nearest_binder_type() {
-        let prop = LeanExpr::Sort(Level::Zero);
-
-        let result = LeanExpr::BVar(0).infer_type_with_context(&[prop.clone()]);
-
-        assert_eq!(result, Ok(prop));
-    }
-
-    #[test]
-    fn bvar_out_of_scope_is_rejected() {
-        let result = LeanExpr::BVar(0).infer_type_with_context(&[]);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn dependent_prop_pi_has_type_prop() {
-        let prop = LeanExpr::Sort(Level::Zero);
-
-        let pi = LeanExpr::Pi(Box::new(prop), Box::new(LeanExpr::BVar(0)));
-
-        assert_eq!(pi.infer_type(), Ok(LeanExpr::Sort(Level::Zero)));
-    }
-
-    #[test]
-    fn arrow_prop_pi_still_has_type_type() {
-        let prop = LeanExpr::Sort(Level::Zero);
-
-        let pi = LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop));
-
-        assert_eq!(
-            pi.infer_type(),
-            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
-        );
-    }
-
-    #[test]
-    fn bvar_lookup_lifts_stored_dependent_type() {
-        let context = vec![LeanExpr::BVar(0), LeanExpr::Sort(Level::Zero)];
-
-        let result = LeanExpr::BVar(0).infer_type_with_context(&context);
-
-        assert_eq!(result, Ok(LeanExpr::BVar(1)));
-    }
-
-    #[test]
-    fn lift_bvar_at_cutoff() {
-        assert_eq!(LeanExpr::BVar(0).lift(1, 0).unwrap(), LeanExpr::BVar(1));
-    }
-
-    #[test]
-    fn lift_bvar_below_cutoff_is_unchanged() {
-        assert_eq!(LeanExpr::BVar(0).lift(1, 1).unwrap(), LeanExpr::BVar(0));
-    }
-
-    #[test]
-    fn lift_pi_increments_cutoff_in_body() {
-        let expr = LeanExpr::Pi(Box::new(LeanExpr::BVar(0)), Box::new(LeanExpr::BVar(0)));
-
-        assert_eq!(
-            expr.lift(1, 0).unwrap(),
-            LeanExpr::Pi(Box::new(LeanExpr::BVar(1)), Box::new(LeanExpr::BVar(0)),)
-        );
     }
 }
