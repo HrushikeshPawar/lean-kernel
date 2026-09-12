@@ -184,3 +184,19 @@ fn nested_lambda_can_reference_outer_binder() {
         ))
     );
 }
+
+#[test]
+fn lambda_rejects_parameter_annotation_that_is_not_a_type() {
+    let prop = LeanExpr::Sort(Level::Zero);
+
+    // This is a term:
+    // λ (p : Prop), p
+    //
+    // Its inferred type is Pi(Prop, Prop), not Sort(_),
+    // so it cannot itself be used as a binder type annotation.
+    let term_as_annotation = LeanExpr::Lambda(Box::new(prop), Box::new(LeanExpr::BVar(0)));
+
+    let lambda = LeanExpr::Lambda(Box::new(term_as_annotation), Box::new(LeanExpr::BVar(0)));
+
+    assert!(lambda.infer_type().is_err());
+}
