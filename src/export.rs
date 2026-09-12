@@ -57,6 +57,26 @@ pub struct NameStrPayload {
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct NameNumRecord {
+    #[serde(rename = "in")]
+    pub id: usize,
+
+    #[serde(rename = "num")]
+    pub name: NameNumPayload,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct NameNumPayload {
+    #[serde(rename = "pre")]
+    pub prefix: usize,
+
+    #[serde(rename = "i")]
+    pub index: usize,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct LevelSuccRecord {
     #[serde(rename = "il")]
     pub id: usize,
@@ -120,6 +140,7 @@ pub enum DefinitionHints {
 pub enum ExportRecord {
     Meta(MetaRecord),
     NameStr(NameStrRecord),
+    NameNum(NameNumRecord),
     LevelSucc(LevelSuccRecord),
     ExprSort(ExprSortRecord),
     Definition(DefinitionRecord),
@@ -142,6 +163,12 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         let record =
             serde_json::from_value::<NameStrRecord>(value).map_err(|error| error.to_string())?;
         return Ok(Some(ExportRecord::NameStr(record)));
+    }
+
+    if object.contains_key("num") {
+        let record =
+            serde_json::from_value::<NameNumRecord>(value).map_err(|error| error.to_string())?;
+        return Ok(Some(ExportRecord::NameNum(record)));
     }
 
     if object.contains_key("succ") {
@@ -211,6 +238,24 @@ mod tests {
                 name: NameStrPayload {
                     prefix: 0,
                     value: "basicDef".to_string(),
+                },
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_name_num_record() {
+        let value: Value = serde_json::from_str(r#"{"in":6,"num":{"i":0,"pre":5}}"#).unwrap();
+
+        let record = parse_supported_record(value).unwrap();
+
+        assert_eq!(
+            record,
+            Some(ExportRecord::NameNum(NameNumRecord {
+                id: 6,
+                name: NameNumPayload {
+                    prefix: 5,
+                    index: 0,
                 },
             }))
         );

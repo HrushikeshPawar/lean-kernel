@@ -1,12 +1,13 @@
 use crate::export::ExprSortRecord;
 use crate::export::LevelSuccRecord;
-use crate::export::NameStrRecord;
 use crate::export::{DefinitionHints, DefinitionRecord, Safety};
+use crate::export::{NameNumRecord, NameStrRecord};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Name {
     Anonymous,
     Str(Box<Name>, String),
+    Num(Box<Name>, usize),
 }
 
 #[derive(Debug)]
@@ -38,6 +39,26 @@ impl NameTable {
 
         self.names
             .push(Name::Str(Box::new(prefix_name), record.name.value.clone()));
+        Ok(())
+    }
+
+    pub fn add_num(&mut self, record: &NameNumRecord) -> Result<(), String> {
+        if record.id != self.names.len() {
+            return Err(format!(
+                "Non-sequential name record id: expected {}, got {}",
+                self.names.len(),
+                record.id
+            ));
+        }
+
+        let prefix_name = self
+            .names
+            .get(record.name.prefix)
+            .ok_or_else(|| format!("Invalid prefix index: {}", record.name.prefix))?
+            .clone();
+
+        self.names
+            .push(Name::Num(Box::new(prefix_name), record.name.index));
         Ok(())
     }
 
@@ -218,6 +239,7 @@ impl ImportState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::export::{NameNumPayload, NameNumRecord};
     use crate::export::{NameStrPayload, NameStrRecord};
 
     #[test]
@@ -311,6 +333,57 @@ mod tests {
                 "Bar".to_string(),
             ))
         );
+    }
+
+    #[test]
+    fn name_table_adds_num_name() {
+        let mut table = NameTable::new();
+
+        let record = NameNumRecord {
+            id: 1,
+            name: NameNumPayload {
+                prefix: 0,
+                index: 7,
+            },
+        };
+
+        table.add_num(&record).unwrap();
+
+        assert_eq!(table.get(1), Some(&Name::Num(Box::new(Name::Anonymous), 7)));
+    }
+
+    #[test]
+    fn name_table_rejects_non_sequential_num_id() {
+        let mut table = NameTable::new();
+
+        let record = NameNumRecord {
+            id: 2,
+            name: NameNumPayload {
+                prefix: 0,
+                index: 7,
+            },
+        };
+
+        let error = table.add_num(&record).unwrap_err();
+
+        assert!(error.contains("Non-sequential name record id"));
+    }
+
+    #[test]
+    fn name_table_rejects_invalid_num_prefix() {
+        let mut table = NameTable::new();
+
+        let record = NameNumRecord {
+            id: 1,
+            name: NameNumPayload {
+                prefix: 42,
+                index: 7,
+            },
+        };
+
+        let error = table.add_num(&record).unwrap_err();
+
+        assert!(error.contains("Invalid prefix index: 42"));
     }
 
     #[test]

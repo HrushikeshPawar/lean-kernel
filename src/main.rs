@@ -50,6 +50,13 @@ fn main() -> ExitCode {
                     }
                 }
 
+                export::ExportRecord::NameNum(record) => {
+                    if let Err(error) = state.names.add_num(&record) {
+                        eprintln!("Invalid name record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
                 export::ExportRecord::LevelSucc(record) => {
                     if let Err(error) = state.levels.add_succ(&record) {
                         eprintln!("Invalid level record on line {line_number}: {error}");
