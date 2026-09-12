@@ -5,6 +5,12 @@ pub struct NameTable {
     pub(super) names: Vec<Name>,
 }
 
+impl Default for NameTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NameTable {
     pub fn new() -> Self {
         NameTable {
@@ -18,6 +24,12 @@ impl NameTable {
 #[derive(Debug)]
 pub struct LevelTable {
     pub(super) levels: Vec<Level>,
+}
+
+impl Default for LevelTable {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LevelTable {
@@ -34,6 +46,12 @@ impl LevelTable {
 pub struct ExprTable {
     pub(super) exprs: Vec<LeanExpr>,
 }
+impl Default for ExprTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExprTable {
     pub fn new() -> Self {
         ExprTable { exprs: Vec::new() }
@@ -47,6 +65,12 @@ pub struct ImportState {
     pub names: NameTable,
     pub levels: LevelTable,
     pub exprs: ExprTable,
+}
+
+impl Default for ImportState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ImportState {
