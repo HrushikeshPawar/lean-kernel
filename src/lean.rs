@@ -1,3 +1,4 @@
+use crate::export::ExprForallRecord;
 use crate::export::ExprSortRecord;
 use crate::export::LevelSuccRecord;
 use crate::export::{DefinitionHints, DefinitionRecord, Safety};
@@ -112,11 +113,29 @@ impl LevelTable {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LeanExpr {
     Sort(Level),
+    Pi(Box<LeanExpr>, Box<LeanExpr>),
 }
 
 #[derive(Debug)]
 pub struct ExprTable {
     exprs: Vec<LeanExpr>,
+}
+
+fn imax(u: &Level, v: &Level) -> Level {
+    fn max_level(u: &Level, v: &Level) -> Level {
+        match (u, v) {
+            (Level::Zero, v) => v.clone(),
+            (u, Level::Zero) => u.clone(),
+            (Level::Succ(u_prev), Level::Succ(v_prev)) => {
+                Level::Succ(Box::new(max_level(u_prev, v_prev)))
+            }
+        }
+    }
+
+    match v {
+        Level::Zero => Level::Zero,
+        _ => max_level(u, v),
+    }
 }
 
 impl LeanExpr {
@@ -125,6 +144,18 @@ impl LeanExpr {
             LeanExpr::Sort(level) => {
                 let next_level = Level::Succ(Box::new(level.clone()));
                 Ok(LeanExpr::Sort(next_level))
+            }
+            LeanExpr::Pi(domain, body) => {
+                let domain_type = domain.infer_type()?;
+                let body_type = body.infer_type()?;
+
+                match (domain_type, body_type) {
+                    (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
+                        let result_level = imax(&level1, &level2);
+                        Ok(LeanExpr::Sort(result_level))
+                    }
+                    _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
+                }
             }
         }
     }
@@ -150,6 +181,69 @@ impl ExprTable {
             .clone();
 
         self.exprs.push(LeanExpr::Sort(level));
+        Ok(())
+    }
+
+    pub fn add_forall(
+        &mut self,
+        record: &ExprForallRecord,
+        names: &NameTable,
+    ) -> Result<(), String> {
+        if record.id != self.exprs.len() {
+            return Err(format!(
+                "Non-sequential expr record id: expected {}, got {}",
+                self.exprs.len(),
+                record.id
+            ));
+        }
+
+        // record.forall_expr.name refers to an existing Name
+        if names.names.get(record.forall_expr.name).is_none() {
+            return Err(format!(
+                "Invalid forall name index: {}",
+                record.forall_expr.name
+            ));
+        }
+
+        // record.forall_expr.type_id refers to an existing Expr
+        if record.forall_expr.type_id >= self.exprs.len() {
+            return Err(format!(
+                "Invalid forall type expression index: {}",
+                record.forall_expr.type_id
+            ));
+        }
+
+        // record.forall_expr.body refers to an existing Expr
+        if record.forall_expr.body >= self.exprs.len() {
+            return Err(format!(
+                "Invalid forall body expression index: {}",
+                record.forall_expr.body
+            ));
+        }
+
+        // append Pi(domain, body)
+        let domain = self
+            .get(record.forall_expr.type_id)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid forall type expression index: {}",
+                    record.forall_expr.type_id
+                )
+            })?
+            .clone();
+
+        let body = self
+            .get(record.forall_expr.body)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid forall body expression index: {}",
+                    record.forall_expr.body
+                )
+            })?
+            .clone();
+
+        self.exprs
+            .push(LeanExpr::Pi(Box::new(domain), Box::new(body)));
         Ok(())
     }
 
@@ -239,6 +333,7 @@ impl ImportState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::export::{BinderInfo, ExprForallPayload, ExprForallRecord};
     use crate::export::{NameNumPayload, NameNumRecord};
     use crate::export::{NameStrPayload, NameStrRecord};
 
@@ -664,5 +759,126 @@ mod tests {
         };
 
         assert_eq!(definition.check(), Ok(false));
+    }
+
+    #[test]
+    fn reconstructs_forall_expression() {
+        let mut names = NameTable::new();
+
+        names
+            .add_str(&NameStrRecord {
+                id: 1,
+                name: NameStrPayload {
+                    prefix: 0,
+                    value: "x".to_string(),
+                },
+            })
+            .unwrap();
+
+        let levels = LevelTable::new();
+        let mut exprs = ExprTable::new();
+
+        exprs
+            .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+            .unwrap();
+
+        let record = ExprForallRecord {
+            id: 1,
+            forall_expr: ExprForallPayload {
+                name: 1,
+                type_id: 0,
+                body: 0,
+                binder_info: BinderInfo::Default,
+            },
+        };
+
+        exprs.add_forall(&record, &names).unwrap();
+
+        assert_eq!(
+            exprs.get(1),
+            Some(&LeanExpr::Pi(
+                Box::new(LeanExpr::Sort(Level::Zero)),
+                Box::new(LeanExpr::Sort(Level::Zero)),
+            ))
+        );
+    }
+
+    #[test]
+    fn forall_expression_rejects_unknown_binder_name() {
+        let names = NameTable::new();
+        let levels = LevelTable::new();
+        let mut exprs = ExprTable::new();
+
+        exprs
+            .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+            .unwrap();
+
+        let record = ExprForallRecord {
+            id: 1,
+            forall_expr: ExprForallPayload {
+                name: 99,
+                type_id: 0,
+                body: 0,
+                binder_info: BinderInfo::Default,
+            },
+        };
+
+        assert!(exprs.add_forall(&record, &names).is_err());
+    }
+
+    #[test]
+    fn forall_expression_rejects_unknown_type_expression() {
+        let mut names = NameTable::new();
+
+        names
+            .add_str(&NameStrRecord {
+                id: 1,
+                name: NameStrPayload {
+                    prefix: 0,
+                    value: "x".to_string(),
+                },
+            })
+            .unwrap();
+
+        let mut exprs = ExprTable::new();
+
+        let record = ExprForallRecord {
+            id: 0,
+            forall_expr: ExprForallPayload {
+                name: 1,
+                type_id: 99,
+                body: 99,
+                binder_info: BinderInfo::Default,
+            },
+        };
+
+        assert!(exprs.add_forall(&record, &names).is_err());
+    }
+
+    #[test]
+    fn prop_to_prop_pi_has_type_type() {
+        let prop = LeanExpr::Sort(Level::Zero);
+
+        let pi = LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop));
+
+        assert_eq!(
+            pi.infer_type(),
+            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
+        );
+    }
+
+    #[test]
+    fn imax_is_zero_when_second_level_is_zero() {
+        let one = Level::Succ(Box::new(Level::Zero));
+
+        assert_eq!(imax(&one, &Level::Zero), Level::Zero);
+    }
+
+    #[test]
+    fn imax_uses_max_when_second_level_is_nonzero() {
+        let one = Level::Succ(Box::new(Level::Zero));
+        let two = Level::Succ(Box::new(one.clone()));
+
+        assert_eq!(imax(&two, &one), two);
     }
 }

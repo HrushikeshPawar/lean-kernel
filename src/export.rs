@@ -97,6 +97,39 @@ pub struct ExprSortRecord {
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct ExprForallRecord {
+    #[serde(rename = "ie")]
+    pub id: usize,
+
+    #[serde(rename = "forallE")]
+    pub forall_expr: ExprForallPayload,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprForallPayload {
+    pub name: usize,
+
+    #[serde(rename = "type")]
+    pub type_id: usize,
+
+    pub body: usize,
+
+    #[serde(rename = "binderInfo")]
+    pub binder_info: BinderInfo,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum BinderInfo {
+    Default,
+    Implicit,
+    StrictImplicit,
+    InstImplicit,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct DefinitionEnvelope {
     #[serde(rename = "def")]
     pub definition: DefinitionRecord,
@@ -143,6 +176,7 @@ pub enum ExportRecord {
     NameNum(NameNumRecord),
     LevelSucc(LevelSuccRecord),
     ExprSort(ExprSortRecord),
+    ExprForall(ExprForallRecord),
     Definition(DefinitionRecord),
 }
 
@@ -181,6 +215,12 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         let record =
             serde_json::from_value::<ExprSortRecord>(value).map_err(|error| error.to_string())?;
         return Ok(Some(ExportRecord::ExprSort(record)));
+    }
+
+    if object.contains_key("forallE") {
+        let record =
+            serde_json::from_value::<ExprForallRecord>(value).map_err(|error| error.to_string())?;
+        return Ok(Some(ExportRecord::ExprForall(record)));
     }
 
     if object.contains_key("def") {
@@ -342,6 +382,29 @@ mod tests {
                 safety: Safety::Safe,
                 type_id: 0,
                 value_id: 1,
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_expr_forall_record() {
+        let value: Value = serde_json::from_str(
+            r#"{"forallE":{"binderInfo":"default","body":1,"name":6,"type":1},"ie":2}"#,
+        )
+        .unwrap();
+
+        let record = parse_supported_record(value).unwrap();
+
+        assert_eq!(
+            record,
+            Some(ExportRecord::ExprForall(ExprForallRecord {
+                id: 2,
+                forall_expr: ExprForallPayload {
+                    name: 6,
+                    type_id: 1,
+                    body: 1,
+                    binder_info: BinderInfo::Default,
+                },
             }))
         );
     }

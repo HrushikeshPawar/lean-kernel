@@ -71,6 +71,13 @@ fn main() -> ExitCode {
                     }
                 }
 
+                export::ExportRecord::ExprForall(record) => {
+                    if let Err(error) = state.exprs.add_forall(&record, &state.names) {
+                        eprintln!("Invalid expression record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
                 export::ExportRecord::Definition(record) => {
                     if !record.level_params.is_empty() {
                         eprintln!("Universe-polymorphic definitions are not supported yet");
