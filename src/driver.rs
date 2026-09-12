@@ -4,11 +4,13 @@ use std::{io::BufRead, process::ExitCode};
 use crate::{
     export,
     import::{self, reconstruct_definition},
+    kernel::LeanDefinition,
 };
 
 pub fn run(reader: impl BufRead) -> ExitCode {
     let mut state = import::ImportState::new();
     let mut checked_definition = false;
+    let mut definitions = Vec::<LeanDefinition>::new();
 
     for (line_index, line_result) in reader.lines().enumerate() {
         let Some(line_number) = line_index.checked_add(1) else {
@@ -96,10 +98,11 @@ pub fn run(reader: impl BufRead) -> ExitCode {
 
                     match reconstructed_definition {
                         Ok(definition) => {
-                            let check_status = definition.check();
+                            let check_status = definition.check_with_env(&definitions);
                             match check_status {
                                 Ok(true) => {
                                     checked_definition = true;
+                                    definitions.push(definition);
                                 }
                                 Ok(false) => {
                                     eprintln!("Definition is invalid");
@@ -127,6 +130,21 @@ pub fn run(reader: impl BufRead) -> ExitCode {
 
                 export::ExportRecord::ExprLam(record) => {
                     if let Err(error) = state.exprs.add_lam(&record, &state.names) {
+                        eprintln!("Invalid expression record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
+                export::ExportRecord::ExprConst(record) => {
+                    if let Err(error) = state.exprs.add_const(&record, &state.names, &state.levels)
+                    {
+                        eprintln!("Invalid expression record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
+                export::ExportRecord::ExprApp(record) => {
+                    if let Err(error) = state.exprs.add_app(&record) {
                         eprintln!("Invalid expression record on line {line_number}: {error}");
                         return ExitCode::from(3);
                     }

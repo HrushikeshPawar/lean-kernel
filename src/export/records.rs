@@ -153,6 +153,42 @@ pub struct ExprLamPayload {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprConstRecord {
+    #[serde(rename = "ie")]
+    pub id: usize,
+
+    #[serde(rename = "const")]
+    pub constant: ExprConstPayload,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprConstPayload {
+    pub name: usize,
+    pub us: Vec<usize>,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprAppRecord {
+    #[serde(rename = "ie")]
+    pub id: usize,
+
+    #[serde(rename = "app")]
+    pub application: ExprAppPayload,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprAppPayload {
+    #[serde(rename = "fn")]
+    pub function: usize,
+
+    pub arg: usize,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum BinderInfo {
     Default,
@@ -212,5 +248,7 @@ pub enum ExportRecord {
     ExprForall(ExprForallRecord),
     ExprLam(ExprLamRecord),
     ExprBVar(ExprBVarRecord),
+    ExprConst(ExprConstRecord),
+    ExprApp(ExprAppRecord),
     Definition(DefinitionRecord),
 }

@@ -208,3 +208,39 @@ fn parses_expr_lam_record() {
         }))
     );
 }
+
+#[test]
+fn parses_expr_const_record() {
+    let value: Value = serde_json::from_str(r#"{"const":{"name":1,"us":[]},"ie":6}"#).unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::ExprConst(ExprConstRecord {
+            id: 6,
+            constant: ExprConstPayload {
+                name: 1,
+                us: vec![],
+            },
+        }))
+    );
+}
+
+#[test]
+fn parses_expr_app_record() {
+    let value: Value = serde_json::from_str(r#"{"app":{"arg":7,"fn":6},"ie":8}"#).unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::ExprApp(ExprAppRecord {
+            id: 8,
+            application: ExprAppPayload {
+                function: 6,
+                arg: 7,
+            },
+        }))
+    );
+}

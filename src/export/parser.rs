@@ -36,6 +36,20 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         return Ok(Some(ExportRecord::ExprLam(record)));
     }
 
+    if object.contains_key("const") {
+        let record =
+            serde_json::from_value::<ExprConstRecord>(value).map_err(|error| error.to_string())?;
+
+        return Ok(Some(ExportRecord::ExprConst(record)));
+    }
+
+    if object.contains_key("app") {
+        let record =
+            serde_json::from_value::<ExprAppRecord>(value).map_err(|error| error.to_string())?;
+
+        return Ok(Some(ExportRecord::ExprApp(record)));
+    }
+
     if object.contains_key("succ") {
         let record =
             serde_json::from_value::<LevelSuccRecord>(value).map_err(|error| error.to_string())?;

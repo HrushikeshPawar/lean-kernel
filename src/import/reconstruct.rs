@@ -1,7 +1,8 @@
 use super::{ExprTable, LevelTable, NameTable};
 use crate::export::{
-    DefinitionHints, DefinitionRecord, ExprBVarRecord, ExprForallRecord, ExprLamRecord,
-    ExprSortRecord, LevelSuccRecord, NameNumRecord, NameStrRecord, Safety,
+    DefinitionHints, DefinitionRecord, ExprAppRecord, ExprBVarRecord, ExprConstRecord,
+    ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelSuccRecord, NameNumRecord, NameStrRecord,
+    Safety,
 };
 use crate::kernel::{LeanDefinition, LeanExpr, Level, Name};
 
@@ -214,6 +215,91 @@ impl ExprTable {
 
         self.exprs
             .push(LeanExpr::Lambda(Box::new(parameter_type), Box::new(body)));
+        Ok(())
+    }
+
+    pub fn add_const(
+        &mut self,
+        record: &ExprConstRecord,
+        names: &NameTable,
+        levels: &LevelTable,
+    ) -> Result<(), String> {
+        if record.id != self.exprs.len() {
+            return Err(format!(
+                "Non-sequential expr record id: expected {}, got {}",
+                self.exprs.len(),
+                record.id
+            ));
+        }
+
+        // record.constant.name refers to an existing Name
+        let name = names
+            .get(record.constant.name)
+            .ok_or_else(|| format!("Invalid const name index: {}", record.constant.name))?
+            .clone();
+
+        // record.constant.us refers to existing Levels
+        let mut level_params = Vec::with_capacity(record.constant.us.len());
+        for &level_id in &record.constant.us {
+            let level = levels
+                .get(level_id)
+                .ok_or_else(|| format!("Invalid const level index: {}", level_id))?
+                .clone();
+            level_params.push(level);
+        }
+
+        self.exprs.push(LeanExpr::Const(name, level_params));
+        Ok(())
+    }
+
+    pub fn add_app(&mut self, record: &ExprAppRecord) -> Result<(), String> {
+        if record.id != self.exprs.len() {
+            return Err(format!(
+                "Non-sequential expr record id: expected {}, got {}",
+                self.exprs.len(),
+                record.id
+            ));
+        }
+
+        // record.application.function refers to an existing Expr
+        if record.application.function >= self.exprs.len() {
+            return Err(format!(
+                "Invalid application function expression index: {}",
+                record.application.function
+            ));
+        }
+
+        // record.application.argument refers to an existing Expr
+        if record.application.arg >= self.exprs.len() {
+            return Err(format!(
+                "Invalid application argument expression index: {}",
+                record.application.arg
+            ));
+        }
+
+        // append App(function, argument)
+        let function = self
+            .get(record.application.function)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid application function expression index: {}",
+                    record.application.function
+                )
+            })?
+            .clone();
+
+        let arg = self
+            .get(record.application.arg)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid application argument expression index: {}",
+                    record.application.arg
+                )
+            })?
+            .clone();
+
+        self.exprs
+            .push(LeanExpr::Application(Box::new(function), Box::new(arg)));
         Ok(())
     }
 }

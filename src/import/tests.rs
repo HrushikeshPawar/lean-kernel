@@ -1,8 +1,9 @@
 use super::*;
 use crate::export::{
-    BinderInfo, DefinitionHints, DefinitionRecord, ExprBVarRecord, ExprForallPayload,
-    ExprForallRecord, ExprLamPayload, ExprLamRecord, ExprSortRecord, LevelSuccRecord,
-    NameNumPayload, NameNumRecord, NameStrPayload, NameStrRecord, Safety,
+    BinderInfo, DefinitionHints, DefinitionRecord, ExprAppPayload, ExprAppRecord, ExprBVarRecord,
+    ExprConstPayload, ExprConstRecord, ExprForallPayload, ExprForallRecord, ExprLamPayload,
+    ExprLamRecord, ExprSortRecord, LevelSuccRecord, NameNumPayload, NameNumRecord, NameStrPayload,
+    NameStrRecord, Safety,
 };
 use crate::kernel::{LeanExpr, Level, Name};
 
@@ -729,4 +730,180 @@ fn lambda_expression_rejects_non_sequential_expr_id() {
     let error = exprs.add_lam(&record, &names).unwrap_err();
 
     assert!(error.contains("Non-sequential expr record id"));
+}
+
+#[test]
+fn reconstructs_const_expression() {
+    // Build NameTable:
+    //   0 = anonymous
+    //   1 = constType
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "constType".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    let record = ExprConstRecord {
+        id: 0,
+        constant: ExprConstPayload {
+            name: 1,
+            us: vec![],
+        },
+    };
+
+    exprs.add_const(&record, &names, &levels).unwrap();
+
+    assert_eq!(
+        exprs.get(0),
+        Some(&LeanExpr::Const(
+            Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+            vec![],
+        ))
+    );
+}
+
+#[test]
+fn const_expression_rejects_unknown_name() {
+    let names = NameTable::new();
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    let record = ExprConstRecord {
+        id: 0,
+        constant: ExprConstPayload {
+            name: 99,
+            us: vec![],
+        },
+    };
+
+    let error = exprs.add_const(&record, &names, &levels).unwrap_err();
+
+    assert_eq!(error, "Invalid const name index: 99");
+}
+
+#[test]
+fn const_expression_rejects_unknown_level_in_us() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "constType".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    let record = ExprConstRecord {
+        id: 0,
+        constant: ExprConstPayload {
+            name: 1,
+            us: vec![99],
+        },
+    };
+
+    let error = exprs.add_const(&record, &names, &levels).unwrap_err();
+
+    assert_eq!(error, "Invalid const level index: 99");
+}
+
+#[test]
+fn lift_constant_is_unchanged() {
+    let expr = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+        vec![],
+    );
+
+    assert_eq!(expr.lift(3, 2).unwrap(), expr);
+}
+
+#[test]
+fn reconstructs_application_expression() {
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    // 0 = Sort(Zero), the function
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    // 1 = BVar(0), the argument
+    exprs.add_bvar(&ExprBVarRecord { id: 1, index: 0 }).unwrap();
+
+    let record = ExprAppRecord {
+        id: 2,
+        application: ExprAppPayload {
+            function: 0,
+            arg: 1,
+        },
+    };
+
+    exprs.add_app(&record).unwrap();
+
+    assert_eq!(
+        exprs.get(2),
+        Some(&LeanExpr::Application(
+            Box::new(LeanExpr::Sort(Level::Zero)),
+            Box::new(LeanExpr::BVar(0)),
+        ))
+    );
+}
+
+#[test]
+fn application_rejects_unknown_function() {
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    // 0 = Sort(Zero), a valid argument reference
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    let record = ExprAppRecord {
+        id: 1,
+        application: ExprAppPayload {
+            function: 99,
+            arg: 0,
+        },
+    };
+
+    let error = exprs.add_app(&record).unwrap_err();
+
+    assert_eq!(error, "Invalid application function expression index: 99");
+}
+
+#[test]
+fn application_rejects_unknown_argument() {
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    // 0 = Sort(Zero), a valid function reference
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    let record = ExprAppRecord {
+        id: 1,
+        application: ExprAppPayload {
+            function: 0,
+            arg: 99,
+        },
+    };
+
+    let error = exprs.add_app(&record).unwrap_err();
+
+    assert_eq!(error, "Invalid application argument expression index: 99");
 }
