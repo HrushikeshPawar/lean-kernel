@@ -881,4 +881,40 @@ mod tests {
 
         assert_eq!(imax(&two, &one), two);
     }
+
+    #[test]
+    fn forall_expression_rejects_unknown_body_expression() {
+        let mut names = NameTable::new();
+
+        names
+            .add_str(&NameStrRecord {
+                id: 1,
+                name: NameStrPayload {
+                    prefix: 0,
+                    value: "x".to_string(),
+                },
+            })
+            .unwrap();
+
+        let levels = LevelTable::new();
+        let mut exprs = ExprTable::new();
+
+        exprs
+            .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+            .unwrap();
+
+        let record = ExprForallRecord {
+            id: 1,
+            forall_expr: ExprForallPayload {
+                name: 1,
+                type_id: 0,
+                body: 99,
+                binder_info: BinderInfo::Default,
+            },
+        };
+
+        let error = exprs.add_forall(&record, &names).unwrap_err();
+
+        assert_eq!(error, "Invalid forall body expression index: 99");
+    }
 }
