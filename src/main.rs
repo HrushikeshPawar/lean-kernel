@@ -6,12 +6,12 @@ use std::{
 
 use lean_kernel::{
     export,
-    lean::{self, reconstruct_definition},
+    import::{self, reconstruct_definition},
 };
 
 fn main() -> ExitCode {
     let stdin = io::stdin();
-    let mut state = lean::ImportState::new();
+    let mut state = import::ImportState::new();
 
     for (line_index, line_result) in stdin.lock().lines().enumerate() {
         let Some(line_number) = line_index.checked_add(1) else {
