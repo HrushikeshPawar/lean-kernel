@@ -120,6 +120,16 @@ pub struct ExprForallPayload {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprBVarRecord {
+    #[serde(rename = "ie")]
+    pub id: usize,
+
+    #[serde(rename = "bvar")]
+    pub index: usize,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum BinderInfo {
     Default,
@@ -178,14 +188,13 @@ pub enum ExportRecord {
     ExprSort(ExprSortRecord),
     ExprForall(ExprForallRecord),
     Definition(DefinitionRecord),
+    ExprBVar(ExprBVarRecord),
 }
 
 pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, String> {
     let Some(object) = value.as_object() else {
         return Err("expected JSON object".to_string());
     };
-
-    // println!("\n{object:?}");
 
     if object.contains_key("meta") {
         let record =
@@ -203,6 +212,12 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         let record =
             serde_json::from_value::<NameNumRecord>(value).map_err(|error| error.to_string())?;
         return Ok(Some(ExportRecord::NameNum(record)));
+    }
+
+    if object.contains_key("bvar") {
+        let record =
+            serde_json::from_value::<ExprBVarRecord>(value).map_err(|error| error.to_string())?;
+        return Ok(Some(ExportRecord::ExprBVar(record)));
     }
 
     if object.contains_key("succ") {
@@ -250,7 +265,7 @@ mod tests {
 
     #[test]
     fn unsupported_record_is_not_a_parse_error() {
-        let value: Value = serde_json::from_str(r#"{"ie":99,"bvar":0}"#).unwrap();
+        let value: Value = serde_json::from_str(r#"{"ie":99,"mystery":0}"#).unwrap();
 
         let result = parse_supported_record(value);
 
@@ -406,6 +421,18 @@ mod tests {
                     binder_info: BinderInfo::Default,
                 },
             }))
+        );
+    }
+
+    #[test]
+    fn parses_expr_bvar_record() {
+        let value: Value = serde_json::from_str(r#"{"bvar":0,"ie":1}"#).unwrap();
+
+        let record = parse_supported_record(value).unwrap();
+
+        assert_eq!(
+            record,
+            Some(ExportRecord::ExprBVar(ExprBVarRecord { id: 1, index: 0 }))
         );
     }
 }

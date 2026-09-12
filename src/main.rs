@@ -121,6 +121,13 @@ fn main() -> ExitCode {
                         }
                     }
                 }
+
+                export::ExportRecord::ExprBVar(record) => {
+                    if let Err(error) = state.exprs.add_bvar(&record) {
+                        eprintln!("Invalid expression record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
             },
 
             Ok(None) => {

@@ -1,3 +1,4 @@
+use crate::export::ExprBVarRecord;
 use crate::export::ExprForallRecord;
 use crate::export::ExprSortRecord;
 use crate::export::LevelSuccRecord;
@@ -113,6 +114,7 @@ impl LevelTable {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LeanExpr {
     Sort(Level),
+    BVar(usize),
     Pi(Box<LeanExpr>, Box<LeanExpr>),
 }
 
@@ -138,16 +140,61 @@ fn imax(u: &Level, v: &Level) -> Level {
     }
 }
 
+fn lookup_bvar_type(context: &[LeanExpr], index: usize) -> Result<LeanExpr, String> {
+    let stored = context
+        .get(index)
+        .ok_or_else(|| format!("Bound variable #{index} is out of scope"))?;
+
+    let distance = index
+        .checked_add(1)
+        .ok_or_else(|| "Bound variable lookup distance overflow".to_string())?;
+
+    stored.lift(distance, 0)
+}
+
 impl LeanExpr {
-    pub fn infer_type(&self) -> Result<LeanExpr, String> {
+    pub fn lift(&self, amount: usize, cutoff: usize) -> Result<LeanExpr, String> {
+        match self {
+            LeanExpr::Sort(level) => Ok(LeanExpr::Sort(level.clone())),
+
+            LeanExpr::BVar(index) => {
+                if *index < cutoff {
+                    Ok(LeanExpr::BVar(*index))
+                } else {
+                    index
+                        .checked_add(amount)
+                        .map(LeanExpr::BVar)
+                        .ok_or_else(|| "Index overflow during lift".to_string())
+                }
+            }
+
+            LeanExpr::Pi(domain, body) => {
+                // domain uses same cutoff
+                let lifted_domain = domain.lift(amount, cutoff)?;
+                // body uses cutoff + 1
+                let new_cutoff = cutoff
+                    .checked_add(1)
+                    .ok_or_else(|| "Cutoff overflow during lift".to_string())?;
+                let lifted_body = body.lift(amount, new_cutoff)?;
+
+                Ok(LeanExpr::Pi(Box::new(lifted_domain), Box::new(lifted_body)))
+            }
+        }
+    }
+
+    pub fn infer_type_with_context(&self, context: &[LeanExpr]) -> Result<LeanExpr, String> {
         match self {
             LeanExpr::Sort(level) => {
                 let next_level = Level::Succ(Box::new(level.clone()));
                 Ok(LeanExpr::Sort(next_level))
             }
             LeanExpr::Pi(domain, body) => {
-                let domain_type = domain.infer_type()?;
-                let body_type = body.infer_type()?;
+                let domain_type = domain.infer_type_with_context(context)?;
+
+                let mut new_context = Vec::with_capacity(context.len() + 1);
+                new_context.push(*domain.clone());
+                new_context.extend_from_slice(context);
+                let body_type = body.infer_type_with_context(&new_context)?;
 
                 match (domain_type, body_type) {
                     (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
@@ -157,7 +204,12 @@ impl LeanExpr {
                     _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
                 }
             }
+            LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
         }
+    }
+
+    pub fn infer_type(&self) -> Result<LeanExpr, String> {
+        self.infer_type_with_context(&[])
     }
 }
 
@@ -244,6 +296,19 @@ impl ExprTable {
 
         self.exprs
             .push(LeanExpr::Pi(Box::new(domain), Box::new(body)));
+        Ok(())
+    }
+
+    pub fn add_bvar(&mut self, record: &ExprBVarRecord) -> Result<(), String> {
+        if record.id != self.exprs.len() {
+            return Err(format!(
+                "Non-sequential expr record id: expected {}, got {}",
+                self.exprs.len(),
+                record.id
+            ));
+        }
+
+        self.exprs.push(LeanExpr::BVar(record.index));
         Ok(())
     }
 
@@ -916,5 +981,114 @@ mod tests {
         let error = exprs.add_forall(&record, &names).unwrap_err();
 
         assert_eq!(error, "Invalid forall body expression index: 99");
+    }
+
+    #[test]
+    fn reconstructs_bvar_expression() {
+        let levels = LevelTable::new();
+        let mut exprs = ExprTable::new();
+
+        exprs
+            .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+            .unwrap();
+
+        let record = ExprBVarRecord { id: 1, index: 0 };
+
+        exprs.add_bvar(&record).unwrap();
+
+        assert_eq!(exprs.get(1), Some(&LeanExpr::BVar(0)));
+    }
+
+    #[test]
+    fn bvar_rejects_non_sequential_expr_id() {
+        let mut exprs = ExprTable::new();
+
+        let record = ExprBVarRecord { id: 1, index: 0 };
+
+        let error = exprs.add_bvar(&record).unwrap_err();
+
+        assert!(error.contains("Non-sequential expr record id"));
+    }
+
+    #[test]
+    fn bvar_index_is_not_an_expr_table_reference() {
+        let levels = LevelTable::new();
+        let mut exprs = ExprTable::new();
+
+        exprs
+            .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+            .unwrap();
+
+        let record = ExprBVarRecord { id: 1, index: 99 };
+
+        exprs.add_bvar(&record).unwrap();
+
+        assert_eq!(exprs.get(1), Some(&LeanExpr::BVar(99)));
+    }
+
+    #[test]
+    fn bvar_zero_gets_nearest_binder_type() {
+        let prop = LeanExpr::Sort(Level::Zero);
+
+        let result = LeanExpr::BVar(0).infer_type_with_context(&[prop.clone()]);
+
+        assert_eq!(result, Ok(prop));
+    }
+
+    #[test]
+    fn bvar_out_of_scope_is_rejected() {
+        let result = LeanExpr::BVar(0).infer_type_with_context(&[]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn dependent_prop_pi_has_type_prop() {
+        let prop = LeanExpr::Sort(Level::Zero);
+
+        let pi = LeanExpr::Pi(Box::new(prop), Box::new(LeanExpr::BVar(0)));
+
+        assert_eq!(pi.infer_type(), Ok(LeanExpr::Sort(Level::Zero)));
+    }
+
+    #[test]
+    fn arrow_prop_pi_still_has_type_type() {
+        let prop = LeanExpr::Sort(Level::Zero);
+
+        let pi = LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop));
+
+        assert_eq!(
+            pi.infer_type(),
+            Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
+        );
+    }
+
+    #[test]
+    fn bvar_lookup_lifts_stored_dependent_type() {
+        let context = vec![LeanExpr::BVar(0), LeanExpr::Sort(Level::Zero)];
+
+        let result = LeanExpr::BVar(0).infer_type_with_context(&context);
+
+        assert_eq!(result, Ok(LeanExpr::BVar(1)));
+    }
+
+    #[test]
+    fn lift_bvar_at_cutoff() {
+        assert_eq!(LeanExpr::BVar(0).lift(1, 0).unwrap(), LeanExpr::BVar(1));
+    }
+
+    #[test]
+    fn lift_bvar_below_cutoff_is_unchanged() {
+        assert_eq!(LeanExpr::BVar(0).lift(1, 1).unwrap(), LeanExpr::BVar(0));
+    }
+
+    #[test]
+    fn lift_pi_increments_cutoff_in_body() {
+        let expr = LeanExpr::Pi(Box::new(LeanExpr::BVar(0)), Box::new(LeanExpr::BVar(0)));
+
+        assert_eq!(
+            expr.lift(1, 0).unwrap(),
+            LeanExpr::Pi(Box::new(LeanExpr::BVar(1)), Box::new(LeanExpr::BVar(0)),)
+        );
     }
 }
