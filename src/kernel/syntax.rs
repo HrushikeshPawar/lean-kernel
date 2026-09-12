@@ -13,8 +13,10 @@ pub enum Level {
 pub enum LeanExpr {
     Sort(Level),
     BVar(usize),
+    Const(Name, Vec<Level>),
     Pi(Box<LeanExpr>, Box<LeanExpr>),
     Lambda(Box<LeanExpr>, Box<LeanExpr>),
+    Application(Box<LeanExpr>, Box<LeanExpr>),
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct LeanDefinition {

@@ -19,19 +19,36 @@ pub(super) fn imax(u: &Level, v: &Level) -> Level {
 }
 
 impl LeanExpr {
-    pub fn infer_type_with_context(&self, context: &[LeanExpr]) -> Result<LeanExpr, String> {
+    pub fn infer_type_with_env_and_context(
+        &self,
+        env: &[LeanDefinition],
+        context: &[LeanExpr],
+    ) -> Result<LeanExpr, String> {
         match self {
             LeanExpr::Sort(level) => {
                 let next_level = Level::Succ(Box::new(level.clone()));
                 Ok(LeanExpr::Sort(next_level))
             }
+            LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
+            LeanExpr::Const(name, universes) => {
+                if !universes.is_empty() {
+                    return Err("Const with universe levels is not supported yet".to_string());
+                }
+
+                let definition = env
+                    .iter()
+                    .find(|def| &def.name == name)
+                    .ok_or_else(|| format!("Constant {:?} not found in environment", name))?;
+
+                Ok(definition.ty.clone())
+            }
             LeanExpr::Pi(domain, body) => {
-                let domain_type = domain.infer_type_with_context(context)?;
+                let domain_type = domain.infer_type_with_env_and_context(env, context)?;
 
                 let mut new_context = Vec::with_capacity(context.len() + 1);
                 new_context.push(*domain.clone());
                 new_context.extend_from_slice(context);
-                let body_type = body.infer_type_with_context(&new_context)?;
+                let body_type = body.infer_type_with_env_and_context(env, &new_context)?;
 
                 match (domain_type, body_type) {
                     (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
@@ -41,9 +58,9 @@ impl LeanExpr {
                     _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
                 }
             }
-            LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
             LeanExpr::Lambda(parameter_type, body) => {
-                let parameter_type_type = parameter_type.infer_type_with_context(context)?;
+                let parameter_type_type =
+                    parameter_type.infer_type_with_env_and_context(env, context)?;
 
                 // Should be Sort(_)
                 if !matches!(parameter_type_type, LeanExpr::Sort(_)) {
@@ -54,11 +71,40 @@ impl LeanExpr {
                 new_context.push(*parameter_type.clone());
                 new_context.extend_from_slice(context);
 
-                let body_type = body.infer_type_with_context(&new_context)?;
+                let body_type = body.infer_type_with_env_and_context(env, &new_context)?;
 
                 Ok(LeanExpr::Pi(parameter_type.clone(), Box::new(body_type)))
             }
+            LeanExpr::Application(function, arg) => {
+                let function_type = function.infer_type_with_env_and_context(env, context)?;
+
+                match function_type {
+                    LeanExpr::Pi(domain, body) => {
+                        let arg_type = arg.infer_type_with_env_and_context(env, context)?;
+
+                        if *domain != arg_type {
+                            return Err(format!(
+                                "Application type mismatch: expected {:?}, got {:?}",
+                                domain, arg_type
+                            ));
+                        }
+
+                        let mut new_context = Vec::with_capacity(context.len() + 1);
+                        new_context.push(*arg.clone());
+                        new_context.extend_from_slice(context);
+
+                        body.instantiate_bvar0(arg)
+                    }
+                    _ => Err(
+                        "Application type inference failed: function is not a Pi type".to_string(),
+                    ),
+                }
+            }
         }
+    }
+
+    pub fn infer_type_with_context(&self, context: &[LeanExpr]) -> Result<LeanExpr, String> {
+        self.infer_type_with_env_and_context(&[], context)
     }
 
     pub fn infer_type(&self) -> Result<LeanExpr, String> {
@@ -67,20 +113,19 @@ impl LeanExpr {
 }
 
 impl LeanDefinition {
-    pub fn check(&self) -> Result<bool, String> {
-        // 1. Infer the type of self.ty.
-        let inferred_ty_type = self.ty.infer_type()?;
+    pub fn check_with_env(&self, env: &[LeanDefinition]) -> Result<bool, String> {
+        let inferred_ty_type = self.ty.infer_type_with_env_and_context(env, &[])?;
 
-        // 2. Make sure that inferred result is a LeanExpr::Sort(_).
-        //    If it isn't, the declaration's annotation is not itself a type.
         if !matches!(inferred_ty_type, LeanExpr::Sort(_)) {
             return Ok(false);
         }
-        // 3. Infer the type of self.value.
-        let inferred_value_type = self.value.infer_type()?;
 
-        // 4. Compare that inferred type with self.ty.
-        // Return Ok(true) / Ok(false).
-        Ok(inferred_value_type == self.ty)
+        let inferred_value_type = self.value.infer_type_with_env_and_context(env, &[])?;
+
+        inferred_value_type.def_eq_with_env(&self.ty, env)
+    }
+
+    pub fn check(&self) -> Result<bool, String> {
+        self.check_with_env(&[])
     }
 }

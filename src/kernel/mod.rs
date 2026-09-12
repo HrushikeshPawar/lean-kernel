@@ -1,4 +1,5 @@
 mod debruijn;
+mod reduction;
 mod syntax;
 mod typing;
 
