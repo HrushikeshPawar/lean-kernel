@@ -129,6 +129,30 @@ pub struct ExprBVarRecord {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprLamRecord {
+    #[serde(rename = "ie")]
+    pub id: usize,
+
+    #[serde(rename = "lam")]
+    pub lambda: ExprLamPayload,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExprLamPayload {
+    pub name: usize,
+
+    #[serde(rename = "type")]
+    pub type_id: usize,
+
+    pub body: usize,
+
+    #[serde(rename = "binderInfo")]
+    pub binder_info: BinderInfo,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum BinderInfo {
     Default,
@@ -186,6 +210,7 @@ pub enum ExportRecord {
     LevelSucc(LevelSuccRecord),
     ExprSort(ExprSortRecord),
     ExprForall(ExprForallRecord),
-    Definition(DefinitionRecord),
+    ExprLam(ExprLamRecord),
     ExprBVar(ExprBVarRecord),
+    Definition(DefinitionRecord),
 }

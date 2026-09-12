@@ -141,3 +141,46 @@ fn lift_pi_increments_cutoff_in_body() {
         LeanExpr::Pi(Box::new(LeanExpr::BVar(1)), Box::new(LeanExpr::BVar(0)),)
     );
 }
+
+#[test]
+fn lift_lambda_increments_cutoff_in_body() {
+    let expr = LeanExpr::Lambda(Box::new(LeanExpr::BVar(0)), Box::new(LeanExpr::BVar(0)));
+
+    assert_eq!(
+        expr.lift(1, 0).unwrap(),
+        LeanExpr::Lambda(Box::new(LeanExpr::BVar(1)), Box::new(LeanExpr::BVar(0)),)
+    );
+}
+
+#[test]
+fn lambda_identity_infers_pi_type() {
+    let prop = LeanExpr::Sort(Level::Zero);
+
+    let lambda = LeanExpr::Lambda(Box::new(prop.clone()), Box::new(LeanExpr::BVar(0)));
+
+    assert_eq!(
+        lambda.infer_type(),
+        Ok(LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop),))
+    );
+}
+
+#[test]
+fn nested_lambda_can_reference_outer_binder() {
+    let type_ = LeanExpr::Sort(Level::Succ(Box::new(Level::Zero)));
+
+    let lambda = LeanExpr::Lambda(
+        Box::new(type_.clone()),
+        Box::new(LeanExpr::Lambda(
+            Box::new(type_.clone()),
+            Box::new(LeanExpr::BVar(1)),
+        )),
+    );
+
+    assert_eq!(
+        lambda.infer_type(),
+        Ok(LeanExpr::Pi(
+            Box::new(type_.clone()),
+            Box::new(LeanExpr::Pi(Box::new(type_.clone()), Box::new(type_),)),
+        ))
+    );
+}

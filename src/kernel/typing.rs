@@ -42,6 +42,22 @@ impl LeanExpr {
                 }
             }
             LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
+            LeanExpr::Lambda(parameter_type, body) => {
+                let parameter_type_type = parameter_type.infer_type_with_context(context)?;
+
+                // Should be Sort(_)
+                if !matches!(parameter_type_type, LeanExpr::Sort(_)) {
+                    return Err("Lambda parameter type is not a Sort".to_string());
+                }
+
+                let mut new_context = Vec::with_capacity(context.len() + 1);
+                new_context.push(*parameter_type.clone());
+                new_context.extend_from_slice(context);
+
+                let body_type = body.infer_type_with_context(&new_context)?;
+
+                Ok(LeanExpr::Pi(parameter_type.clone(), Box::new(body_type)))
+            }
         }
     }
 

@@ -124,6 +124,13 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                         return ExitCode::from(3);
                     }
                 }
+
+                export::ExportRecord::ExprLam(record) => {
+                    if let Err(error) = state.exprs.add_lam(&record, &state.names) {
+                        eprintln!("Invalid expression record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
             },
 
             Ok(None) => {

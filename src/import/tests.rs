@@ -1,8 +1,8 @@
 use super::*;
 use crate::export::{
     BinderInfo, DefinitionHints, DefinitionRecord, ExprBVarRecord, ExprForallPayload,
-    ExprForallRecord, ExprSortRecord, LevelSuccRecord, NameNumPayload, NameNumRecord,
-    NameStrPayload, NameStrRecord, Safety,
+    ExprForallRecord, ExprLamPayload, ExprLamRecord, ExprSortRecord, LevelSuccRecord,
+    NameNumPayload, NameNumRecord, NameStrPayload, NameStrRecord, Safety,
 };
 use crate::kernel::{LeanExpr, Level, Name};
 
@@ -553,4 +553,180 @@ fn bvar_index_is_not_an_expr_table_reference() {
     exprs.add_bvar(&record).unwrap();
 
     assert_eq!(exprs.get(1), Some(&LeanExpr::BVar(99)));
+}
+
+#[test]
+fn reconstructs_lambda_expression() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "x".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    // 0 = Sort(Zero), the parameter type
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    // 1 = BVar(0), the body
+    exprs.add_bvar(&ExprBVarRecord { id: 1, index: 0 }).unwrap();
+
+    let record = ExprLamRecord {
+        id: 2,
+        lambda: ExprLamPayload {
+            name: 1,
+            type_id: 0,
+            body: 1,
+            binder_info: BinderInfo::Default,
+        },
+    };
+
+    exprs.add_lam(&record, &names).unwrap();
+
+    assert_eq!(
+        exprs.get(2),
+        Some(&LeanExpr::Lambda(
+            Box::new(LeanExpr::Sort(Level::Zero)),
+            Box::new(LeanExpr::BVar(0)),
+        ))
+    );
+}
+
+#[test]
+fn lambda_expression_rejects_unknown_binder_name() {
+    let names = NameTable::new();
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    let record = ExprLamRecord {
+        id: 1,
+        lambda: ExprLamPayload {
+            name: 99,
+            type_id: 0,
+            body: 0,
+            binder_info: BinderInfo::Default,
+        },
+    };
+
+    assert!(exprs.add_lam(&record, &names).is_err());
+}
+
+#[test]
+fn lambda_expression_rejects_unknown_type_expression() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "x".to_string(),
+            },
+        })
+        .unwrap();
+
+    let mut exprs = ExprTable::new();
+
+    // 0 = BVar(0), the body. The type index points past it.
+    exprs.add_bvar(&ExprBVarRecord { id: 0, index: 0 }).unwrap();
+
+    let record = ExprLamRecord {
+        id: 1,
+        lambda: ExprLamPayload {
+            name: 1,
+            type_id: 99,
+            body: 0,
+            binder_info: BinderInfo::Default,
+        },
+    };
+
+    let error = exprs.add_lam(&record, &names).unwrap_err();
+
+    assert_eq!(error, "Invalid lambda type expression index: 99");
+}
+
+#[test]
+fn lambda_expression_rejects_unknown_body_expression() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "x".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    // 0 = Sort(Zero), the parameter type. The body index points past it.
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    let record = ExprLamRecord {
+        id: 1,
+        lambda: ExprLamPayload {
+            name: 1,
+            type_id: 0,
+            body: 99,
+            binder_info: BinderInfo::Default,
+        },
+    };
+
+    let error = exprs.add_lam(&record, &names).unwrap_err();
+
+    assert_eq!(error, "Invalid lambda body expression index: 99");
+}
+
+#[test]
+fn lambda_expression_rejects_non_sequential_expr_id() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "x".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut exprs = ExprTable::new();
+
+    exprs
+        .add_sort(&ExprSortRecord { id: 0, level: 0 }, &levels)
+        .unwrap();
+
+    let record = ExprLamRecord {
+        id: 7,
+        lambda: ExprLamPayload {
+            name: 1,
+            type_id: 0,
+            body: 0,
+            binder_info: BinderInfo::Default,
+        },
+    };
+
+    let error = exprs.add_lam(&record, &names).unwrap_err();
+
+    assert!(error.contains("Non-sequential expr record id"));
 }

@@ -1,7 +1,7 @@
 use super::{ExprTable, LevelTable, NameTable};
 use crate::export::{
-    DefinitionHints, DefinitionRecord, ExprBVarRecord, ExprForallRecord, ExprSortRecord,
-    LevelSuccRecord, NameNumRecord, NameStrRecord, Safety,
+    DefinitionHints, DefinitionRecord, ExprBVarRecord, ExprForallRecord, ExprLamRecord,
+    ExprSortRecord, LevelSuccRecord, NameNumRecord, NameStrRecord, Safety,
 };
 use crate::kernel::{LeanDefinition, LeanExpr, Level, Name};
 
@@ -158,6 +158,62 @@ impl ExprTable {
         }
 
         self.exprs.push(LeanExpr::BVar(record.index));
+        Ok(())
+    }
+
+    pub fn add_lam(&mut self, record: &ExprLamRecord, names: &NameTable) -> Result<(), String> {
+        if record.id != self.exprs.len() {
+            return Err(format!(
+                "Non-sequential expr record id: expected {}, got {}",
+                self.exprs.len(),
+                record.id
+            ));
+        }
+
+        // record.lambda.name refers to an existing Name
+        if names.names.get(record.lambda.name).is_none() {
+            return Err(format!("Invalid lambda name index: {}", record.lambda.name));
+        }
+
+        // record.lambda.type_id refers to an existing Expr
+        if record.lambda.type_id >= self.exprs.len() {
+            return Err(format!(
+                "Invalid lambda type expression index: {}",
+                record.lambda.type_id
+            ));
+        }
+
+        // record.lambda.body refers to an existing Expr
+        if record.lambda.body >= self.exprs.len() {
+            return Err(format!(
+                "Invalid lambda body expression index: {}",
+                record.lambda.body
+            ));
+        }
+
+        // append Lambda(parameter_type, body)
+        let parameter_type = self
+            .get(record.lambda.type_id)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid lambda type expression index: {}",
+                    record.lambda.type_id
+                )
+            })?
+            .clone();
+
+        let body = self
+            .get(record.lambda.body)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid lambda body expression index: {}",
+                    record.lambda.body
+                )
+            })?
+            .clone();
+
+        self.exprs
+            .push(LeanExpr::Lambda(Box::new(parameter_type), Box::new(body)));
         Ok(())
     }
 }

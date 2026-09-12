@@ -185,3 +185,26 @@ fn parses_expr_bvar_record() {
         Some(ExportRecord::ExprBVar(ExprBVarRecord { id: 1, index: 0 }))
     );
 }
+
+#[test]
+fn parses_expr_lam_record() {
+    let value: Value = serde_json::from_str(
+        r#"{"ie":4,"lam":{"binderInfo":"default","body":3,"name":8,"type":0}}"#,
+    )
+    .unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::ExprLam(ExprLamRecord {
+            id: 4,
+            lambda: ExprLamPayload {
+                name: 8,
+                type_id: 0,
+                body: 3,
+                binder_info: BinderInfo::Default,
+            },
+        }))
+    );
+}

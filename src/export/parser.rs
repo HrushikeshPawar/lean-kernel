@@ -30,6 +30,12 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         return Ok(Some(ExportRecord::ExprBVar(record)));
     }
 
+    if object.contains_key("lam") {
+        let record =
+            serde_json::from_value::<ExprLamRecord>(value).map_err(|error| error.to_string())?;
+        return Ok(Some(ExportRecord::ExprLam(record)));
+    }
+
     if object.contains_key("succ") {
         let record =
             serde_json::from_value::<LevelSuccRecord>(value).map_err(|error| error.to_string())?;

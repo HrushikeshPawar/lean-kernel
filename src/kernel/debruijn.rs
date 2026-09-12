@@ -39,6 +39,19 @@ impl LeanExpr {
 
                 Ok(LeanExpr::Pi(Box::new(lifted_domain), Box::new(lifted_body)))
             }
+
+            LeanExpr::Lambda(parameter_type, body) => {
+                let lifted_parameter_type = parameter_type.lift(amount, cutoff)?;
+                let new_cutoff = cutoff
+                    .checked_add(1)
+                    .ok_or_else(|| "Cutoff overflow during lift".to_string())?;
+                let lifted_body = body.lift(amount, new_cutoff)?;
+
+                Ok(LeanExpr::Lambda(
+                    Box::new(lifted_parameter_type),
+                    Box::new(lifted_body),
+                ))
+            }
         }
     }
 }
