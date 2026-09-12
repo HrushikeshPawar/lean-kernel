@@ -4,10 +4,10 @@ use std::{
     process::ExitCode,
 };
 
-use crate::lean::reconstruct_definition;
-
-mod export;
-mod lean;
+use lean_kernel::{
+    export,
+    lean::{self, reconstruct_definition},
+};
 
 fn main() -> ExitCode {
     let stdin = io::stdin();
