@@ -102,6 +102,16 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                             match check_status {
                                 Ok(true) => {
                                     checked_definition = true;
+
+                                    // If duplicate in definition raise
+                                    if definitions.iter().any(|def| def.name == definition.name) {
+                                        eprintln!(
+                                            "Duplicate definition name: {:?}",
+                                            definition.name
+                                        );
+                                        return ExitCode::from(1);
+                                    }
+
                                     definitions.push(definition);
                                 }
                                 Ok(false) => {
@@ -212,6 +222,28 @@ mod tests {
             "\n",
             // second : Prop := Prop    -- invalid, because Prop : Type
             r#"{"def":{"all":[2],"hints":"opaque","levelParams":[],"name":2,"safety":"safe","type":1,"value":1}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(1));
+    }
+
+    #[test]
+    fn duplicate_definition_name_is_rejected() {
+        let input = concat!(
+            r#"{"in":1,"str":{"pre":0,"str":"dup"}}"#,
+            "\n",
+            r#"{"il":1,"succ":0}"#,
+            "\n",
+            r#"{"ie":0,"sort":1}"#,
+            "\n",
+            r#"{"ie":1,"sort":0}"#,
+            "\n",
+            // dup : Type := Prop
+            r#"{"def":{"all":[1],"hints":"opaque","levelParams":[],"name":1,"safety":"safe","type":0,"value":1}}"#,
+            "\n",
+            // Same declaration name again.
+            r#"{"def":{"all":[1],"hints":"opaque","levelParams":[],"name":1,"safety":"safe","type":0,"value":1}}"#,
             "\n",
         );
 
