@@ -333,10 +333,6 @@ pub fn reconstruct_definition(
     names: &NameTable,
     exprs: &ExprTable,
 ) -> Result<LeanDefinition, String> {
-    if !record.level_params.is_empty() {
-        return Err("universe parameters are not supported yet".to_string());
-    }
-
     if record.safety != Safety::Safe {
         return Err("non-safe definitions are not supported yet".to_string());
     }
@@ -360,5 +356,19 @@ pub fn reconstruct_definition(
         .ok_or_else(|| format!("Invalid value expression index: {}", record.value_id))?
         .clone();
 
-    Ok(LeanDefinition { name, ty, value })
+    let mut level_params = Vec::with_capacity(record.level_params.len());
+    for &param_id in &record.level_params {
+        let param = names
+            .get(param_id)
+            .ok_or_else(|| format!("Invalid level parameter name index: {}", param_id))?
+            .clone();
+        level_params.push(param);
+    }
+
+    Ok(LeanDefinition {
+        name,
+        level_params,
+        ty,
+        value,
+    })
 }

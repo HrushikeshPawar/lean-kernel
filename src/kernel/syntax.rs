@@ -22,6 +22,7 @@ pub enum LeanExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LeanDefinition {
     pub name: Name,
+    pub level_params: Vec<Name>,
     pub ty: LeanExpr,
     pub value: LeanExpr,
 }

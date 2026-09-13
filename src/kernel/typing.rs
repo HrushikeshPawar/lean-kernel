@@ -1,5 +1,28 @@
 use super::debruijn::lookup_bvar_type;
-use super::{LeanDefinition, LeanExpr, Level};
+use super::{LeanDefinition, LeanExpr, Level, Name};
+
+fn level_in_scope(level: &Level, level_params: &[Name]) -> bool {
+    match level {
+        Level::Zero => true,
+        Level::Succ(inner) => level_in_scope(inner, level_params),
+        Level::Param(name) => level_params.contains(name),
+    }
+}
+
+fn expr_levels_in_scope(expr: &LeanExpr, level_params: &[Name]) -> bool {
+    match expr {
+        LeanExpr::Sort(level) => level_in_scope(level, level_params),
+        LeanExpr::BVar(_) => true,
+        LeanExpr::Const(_, universes) => universes
+            .iter()
+            .all(|level| level_in_scope(level, level_params)),
+        LeanExpr::Pi(domain, body)
+        | LeanExpr::Lambda(domain, body)
+        | LeanExpr::Application(domain, body) => {
+            expr_levels_in_scope(domain, level_params) && expr_levels_in_scope(body, level_params)
+        }
+    }
+}
 
 pub(super) fn imax(u: &Level, v: &Level) -> Result<Level, String> {
     fn max_level(u: &Level, v: &Level) -> Result<Level, String> {
@@ -112,6 +135,12 @@ impl LeanExpr {
 
 impl LeanDefinition {
     pub fn check_with_env(&self, env: &[LeanDefinition]) -> Result<bool, String> {
+        if !expr_levels_in_scope(&self.ty, &self.level_params)
+            || !expr_levels_in_scope(&self.value, &self.level_params)
+        {
+            return Ok(false);
+        }
+
         let inferred_ty_type = self.ty.infer_type_with_env_and_context(env, &[])?;
 
         if !matches!(inferred_ty_type, LeanExpr::Sort(_)) {

@@ -27,6 +27,7 @@ fn type_has_next_universe_as_type() {
 fn basic_def_is_valid() {
     let definition = LeanDefinition {
         name: Name::Str(Box::new(Name::Anonymous), "basicDef".to_string()),
+        level_params: vec![],
         ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))),
         value: LeanExpr::Sort(Level::Zero),
     };
@@ -38,6 +39,7 @@ fn basic_def_is_valid() {
 fn definition_rejects_value_with_wrong_type() {
     let definition = LeanDefinition {
         name: Name::Str(Box::new(Name::Anonymous), "bad".to_string()),
+        level_params: vec![],
 
         // Claims: bad : Prop
         ty: LeanExpr::Sort(Level::Zero),
@@ -47,6 +49,22 @@ fn definition_rejects_value_with_wrong_type() {
     };
 
     assert_eq!(definition.check(), Ok(false));
+}
+
+#[test]
+fn declared_universe_parameter_is_accepted() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+
+    let definition = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        level_params: vec![u.clone()],
+
+        // poly.{u} : Sort (u + 1) := Sort u
+        ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Param(u.clone())))),
+        value: LeanExpr::Sort(Level::Param(u)),
+    };
+
+    assert_eq!(definition.check(), Ok(true));
 }
 
 #[test]
@@ -274,6 +292,7 @@ fn constant_infers_type_from_environment() {
     // foo : Type := Prop
     let foo = LeanDefinition {
         name: Name::Str(Box::new(Name::Anonymous), "foo".to_string()),
+        level_params: vec![],
         ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))),
         value: LeanExpr::Sort(Level::Zero),
     };
@@ -357,6 +376,7 @@ fn later_definition_can_reference_prior_definition() {
 
     let foo = LeanDefinition {
         name: foo_name.clone(),
+        level_params: vec![],
         ty: type_.clone(),
         value: prop,
     };
@@ -366,6 +386,7 @@ fn later_definition_can_reference_prior_definition() {
     // bar : Type := foo
     let bar = LeanDefinition {
         name: Name::Str(Box::new(Name::Anonymous), "bar".to_string()),
+        level_params: vec![],
         ty: type_,
         value: LeanExpr::Const(foo_name, vec![]),
     };
@@ -397,6 +418,7 @@ fn whnf_delta_then_beta_reduces_const_type() {
 
     let definition = LeanDefinition {
         name: name.clone(),
+        level_params: vec![],
         ty: LeanExpr::Pi(
             Box::new(type_.clone()),
             Box::new(LeanExpr::Pi(Box::new(type_.clone()), Box::new(type_))),
@@ -446,6 +468,7 @@ fn const_type_definition() -> LeanDefinition {
 
     LeanDefinition {
         name: Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+        level_params: vec![],
         ty: LeanExpr::Pi(
             Box::new(type_.clone()),
             Box::new(LeanExpr::Pi(Box::new(type_.clone()), Box::new(type_))),
