@@ -431,9 +431,12 @@ fn const_universe_arity_mismatch_fails() {
     )
     .infer_type_with_env_and_context(&[poly], &[]);
 
-    assert!(result
-        .unwrap_err()
-        .contains("Universe argument count mismatch"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Universe argument count mismatch")
+    );
 }
 
 #[test]
@@ -743,4 +746,42 @@ fn def_eq_distinguishes_pi_codomain_levels() {
     let rhs = LeanExpr::Pi(Box::new(prop), Box::new(type_));
 
     assert_eq!(lhs.def_eq_with_env(&rhs, &[]), Ok(false));
+}
+
+#[test]
+fn definition_rejects_pi_domain_that_is_not_a_type() {
+    let prop = LeanExpr::Sort(Level::Zero);
+    let x = Name::Str(Box::new(Name::Anonymous), "x".to_string());
+    let h = Name::Str(Box::new(Name::Anonymous), "h".to_string());
+
+    // outer x : Prop := Prop -> Prop (a genuine proposition)
+    let outer = LeanDefinition {
+        name: x.clone(),
+        level_params: vec![],
+        ty: prop.clone(),
+        value: LeanExpr::Pi(Box::new(prop.clone()), Box::new(LeanExpr::BVar(0))),
+    };
+
+    // inner proof h : x (axiom-style entry: no Lean-unfoldable value)
+    let proof = LeanDefinition {
+        name: h.clone(),
+        level_params: vec![],
+        ty: LeanExpr::Const(x.clone(), vec![]),
+        value: LeanExpr::Const(x.clone(), vec![]),
+    };
+
+    // forallBad : Prop := Π (_ : h), _ — the domain `h` is a proof term,
+    // whose type is `x`, not a Sort; the binder must be rejected.
+    let definition = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "forallBad".to_string()),
+        level_params: vec![],
+        ty: prop,
+        value: LeanExpr::Pi(
+            Box::new(LeanExpr::Const(h, vec![])),
+            Box::new(LeanExpr::BVar(0)),
+        ),
+    };
+
+    assert_eq!(outer.check_with_env(&[]), Ok(true));
+    assert_eq!(definition.check_with_env(&[outer, proof]), Ok(false));
 }

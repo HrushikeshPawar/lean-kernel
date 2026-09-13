@@ -11,7 +11,8 @@ impl LeanExpr {
                 if let Some(definition) = env.iter().find(|def| &def.name == name) {
                     let instantiated_value = definition
                         .value
-                        .instantiate_level_params(&definition.level_params, universes)?;
+                        .instantiate_level_params(&definition.level_params, universes)
+                        .map_err(|error| error.to_string())?;
 
                     instantiated_value.whnf_with_env(env)
                 } else {

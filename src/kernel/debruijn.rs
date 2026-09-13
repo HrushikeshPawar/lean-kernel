@@ -1,15 +1,16 @@
 use super::LeanExpr;
+use super::typing::TypeError;
 
-pub(super) fn lookup_bvar_type(context: &[LeanExpr], index: usize) -> Result<LeanExpr, String> {
+pub(super) fn lookup_bvar_type(context: &[LeanExpr], index: usize) -> Result<LeanExpr, TypeError> {
     let stored = context
         .get(index)
-        .ok_or_else(|| format!("Bound variable #{index} is out of scope"))?;
+        .ok_or_else(|| TypeError::Invalid(format!("Bound variable #{index} is out of scope")))?;
 
     let distance = index
         .checked_add(1)
-        .ok_or_else(|| "Bound variable lookup distance overflow".to_string())?;
+        .ok_or_else(|| TypeError::Failure("Bound variable lookup distance overflow".to_string()))?;
 
-    stored.lift(distance, 0)
+    stored.lift(distance, 0).map_err(TypeError::from)
 }
 
 impl LeanExpr {

@@ -1,4 +1,7 @@
-use super::{LeanExpr, Level, Name};
+use super::LeanExpr;
+use super::Level;
+use super::Name;
+use super::typing::TypeError;
 
 impl LeanExpr {
     /// Replaces every universe `Param(uᵢ)` in `params` with the corresponding
@@ -10,13 +13,13 @@ impl LeanExpr {
         &self,
         params: &[Name],
         levels: &[Level],
-    ) -> Result<LeanExpr, String> {
+    ) -> Result<LeanExpr, TypeError> {
         if params.len() != levels.len() {
-            return Err(format!(
+            return Err(TypeError::Invalid(format!(
                 "Universe argument count mismatch: expected {}, got {}",
                 params.len(),
                 levels.len()
-            ));
+            )));
         }
 
         fn instantiate_level(level: &Level, params: &[Name], levels: &[Level]) -> Level {
@@ -72,6 +75,6 @@ impl LeanExpr {
             }
         }
 
-        instantiate_expr(self, params, levels)
+        instantiate_expr(self, params, levels).map_err(TypeError::from)
     }
 }

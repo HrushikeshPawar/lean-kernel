@@ -1,6 +1,30 @@
 use super::debruijn::lookup_bvar_type;
 use super::{LeanDefinition, LeanExpr, Level, Name};
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum TypeError {
+    /// The Lean expression violates a typing rule; the declaration should reject.
+    Invalid(String),
+    /// Our checker could not perform the operation; the caller should decline.
+    Failure(String),
+}
+
+impl From<String> for TypeError {
+    fn from(error: String) -> Self {
+        TypeError::Failure(error)
+    }
+}
+
+impl std::fmt::Display for TypeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeError::Invalid(message) | TypeError::Failure(message) => {
+                write!(formatter, "{message}")
+            }
+        }
+    }
+}
+
 fn level_in_scope(level: &Level, level_params: &[Name]) -> bool {
     match level {
         Level::Zero => true,
@@ -55,7 +79,7 @@ impl LeanExpr {
         &self,
         env: &[LeanDefinition],
         context: &[LeanExpr],
-    ) -> Result<LeanExpr, String> {
+    ) -> Result<LeanExpr, TypeError> {
         match self {
             LeanExpr::Sort(level) => {
                 let next_level = Level::Succ(Box::new(level.clone()));
@@ -63,10 +87,9 @@ impl LeanExpr {
             }
             LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
             LeanExpr::Const(name, universes) => {
-                let definition = env
-                    .iter()
-                    .find(|def| &def.name == name)
-                    .ok_or_else(|| format!("Constant {:?} not found in environment", name))?;
+                let definition = env.iter().find(|def| &def.name == name).ok_or_else(|| {
+                    TypeError::Invalid(format!("Constant {:?} not found in environment", name))
+                })?;
 
                 definition
                     .ty
@@ -91,7 +114,9 @@ impl LeanExpr {
                         let result_level = imax(&level1, &level2);
                         Ok(LeanExpr::Sort(result_level))
                     }
-                    _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
+                    _ => Err(TypeError::Invalid(
+                        "Pi domain or body is not a type".to_string(),
+                    )),
                 }
             }
             LeanExpr::Lambda(parameter_type, body) => {
@@ -100,7 +125,9 @@ impl LeanExpr {
 
                 // Should be Sort(_)
                 if !matches!(parameter_type_type, LeanExpr::Sort(_)) {
-                    return Err("Lambda parameter type is not a Sort".to_string());
+                    return Err(TypeError::Invalid(
+                        "Lambda parameter type is not a Sort".to_string(),
+                    ));
                 }
 
                 let mut new_context = Vec::with_capacity(context.len() + 1);
@@ -119,17 +146,17 @@ impl LeanExpr {
                         let arg_type = arg.infer_type_with_env_and_context(env, context)?;
 
                         if *domain != arg_type {
-                            return Err(format!(
+                            return Err(TypeError::Invalid(format!(
                                 "Application type mismatch: expected {:?}, got {:?}",
                                 domain, arg_type
-                            ));
+                            )));
                         }
 
-                        body.instantiate_bvar0(arg)
+                        body.instantiate_bvar0(arg).map_err(TypeError::from)
                     }
-                    _ => Err(
+                    _ => Err(TypeError::Invalid(
                         "Application type inference failed: function is not a Pi type".to_string(),
-                    ),
+                    )),
                 }
             }
         }
@@ -137,6 +164,7 @@ impl LeanExpr {
 
     pub fn infer_type_with_context(&self, context: &[LeanExpr]) -> Result<LeanExpr, String> {
         self.infer_type_with_env_and_context(&[], context)
+            .map_err(|error| error.to_string())
     }
 
     pub fn infer_type(&self) -> Result<LeanExpr, String> {
@@ -152,13 +180,21 @@ impl LeanDefinition {
             return Ok(false);
         }
 
-        let inferred_ty_type = self.ty.infer_type_with_env_and_context(env, &[])?;
+        let inferred_ty_type = match self.ty.infer_type_with_env_and_context(env, &[]) {
+            Ok(ty) => ty,
+            Err(TypeError::Invalid(_)) => return Ok(false),
+            Err(TypeError::Failure(error)) => return Err(error),
+        };
 
         if !matches!(inferred_ty_type, LeanExpr::Sort(_)) {
             return Ok(false);
         }
 
-        let inferred_value_type = self.value.infer_type_with_env_and_context(env, &[])?;
+        let inferred_value_type = match self.value.infer_type_with_env_and_context(env, &[]) {
+            Ok(ty) => ty,
+            Err(TypeError::Invalid(_)) => return Ok(false),
+            Err(TypeError::Failure(error)) => return Err(error),
+        };
 
         inferred_value_type.def_eq_with_env(&self.ty, env)
     }
