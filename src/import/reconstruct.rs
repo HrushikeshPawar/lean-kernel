@@ -337,8 +337,10 @@ pub fn reconstruct_definition(
         return Err("non-safe definitions are not supported yet".to_string());
     }
 
-    if record.hints != DefinitionHints::Keyword("opaque".to_string()) {
-        return Err("definition hint is not supported yet".to_string());
+    match &record.hints {
+        DefinitionHints::Keyword(keyword) if keyword == "opaque" => {}
+        DefinitionHints::Regular { .. } => {}
+        _ => return Err("definition hint is not supported yet".to_string()),
     }
 
     let name = names

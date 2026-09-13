@@ -4,12 +4,17 @@ pub enum Name {
     Str(Box<Name>, String),
     Num(Box<Name>, usize),
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Level {
     Zero,
     Succ(Box<Level>),
     Param(Name),
+
+    Max(Box<Level>, Box<Level>),
+    IMax(Box<Level>, Box<Level>),
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LeanExpr {
     Sort(Level),
@@ -19,6 +24,7 @@ pub enum LeanExpr {
     Lambda(Box<LeanExpr>, Box<LeanExpr>),
     Application(Box<LeanExpr>, Box<LeanExpr>),
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LeanDefinition {
     pub name: Name,

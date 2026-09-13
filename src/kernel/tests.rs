@@ -83,7 +83,7 @@ fn prop_to_prop_pi_has_type_type() {
 fn imax_is_zero_when_second_level_is_zero() {
     let one = Level::Succ(Box::new(Level::Zero));
 
-    assert_eq!(imax(&one, &Level::Zero), Ok(Level::Zero));
+    assert_eq!(imax(&one, &Level::Zero), Level::Zero);
 }
 
 #[test]
@@ -91,31 +91,84 @@ fn imax_uses_max_when_second_level_is_nonzero() {
     let one = Level::Succ(Box::new(Level::Zero));
     let two = Level::Succ(Box::new(one.clone()));
 
-    assert_eq!(imax(&two, &one), Ok(two));
+    assert_eq!(imax(&two, &one), two);
 }
 
 #[test]
 fn imax_of_zero_and_param_is_param() {
     let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
 
-    assert_eq!(imax(&Level::Zero, &param), Ok(param));
+    assert_eq!(imax(&Level::Zero, &param), param);
 }
 
 #[test]
 fn imax_of_param_with_itself_is_param() {
     let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
 
-    assert_eq!(imax(&param, &param), Ok(param));
+    assert_eq!(imax(&param, &param), param);
 }
 
 #[test]
-fn imax_with_symbolic_succ_and_param_is_unsupported() {
-    let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
-    let one = Level::Succ(Box::new(Level::Zero));
+fn imax_of_succ_param_and_param_stays_imax() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
 
+    // 008 pressure: imax(Succ(u), u) == IMax(Succ(u), u)
     assert_eq!(
-        imax(&one, &param),
-        Err("symbolic universe max/imax is not supported yet".to_string())
+        imax(
+            &Level::Succ(Box::new(Level::Param(u.clone()))),
+            &Level::Param(u)
+        ),
+        Level::IMax(
+            Box::new(Level::Succ(Box::new(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string()
+            ))))),
+            Box::new(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string()
+            )))
+        )
+    );
+}
+
+#[test]
+fn imax_of_succ_params_becomes_succ_max() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+    let v = Name::Str(Box::new(Name::Anonymous), "v".to_string());
+
+    // Assuming u != v: imax(Succ(u), Succ(v)) == Succ(Max(u, v))
+    assert_eq!(
+        imax(
+            &Level::Succ(Box::new(Level::Param(u))),
+            &Level::Succ(Box::new(Level::Param(v)))
+        ),
+        Level::Succ(Box::new(Level::Max(
+            Box::new(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string()
+            ))),
+            Box::new(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "v".to_string()
+            )))
+        )))
+    );
+}
+
+#[test]
+fn imax_of_succ_zero_and_param_stays_imax() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+
+    // Guard: imax(Succ(Zero), Param(u)) must remain IMax, not become Max.
+    assert_eq!(
+        imax(
+            &Level::Succ(Box::new(Level::Zero)),
+            &Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()))
+        ),
+        Level::IMax(
+            Box::new(Level::Succ(Box::new(Level::Zero))),
+            Box::new(Level::Param(u))
+        )
     );
 }
 

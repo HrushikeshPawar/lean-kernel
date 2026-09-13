@@ -6,6 +6,8 @@ fn level_in_scope(level: &Level, level_params: &[Name]) -> bool {
         Level::Zero => true,
         Level::Succ(inner) => level_in_scope(inner, level_params),
         Level::Param(name) => level_params.contains(name),
+        Level::Max(u, v) => level_in_scope(u, level_params) && level_in_scope(v, level_params),
+        Level::IMax(u, v) => level_in_scope(u, level_params) && level_in_scope(v, level_params),
     }
 }
 
@@ -24,22 +26,27 @@ fn expr_levels_in_scope(expr: &LeanExpr, level_params: &[Name]) -> bool {
     }
 }
 
-pub(super) fn imax(u: &Level, v: &Level) -> Result<Level, String> {
-    fn max_level(u: &Level, v: &Level) -> Result<Level, String> {
+pub(super) fn imax(u: &Level, v: &Level) -> Level {
+    fn max_level(u: &Level, v: &Level) -> Level {
         match (u, v) {
-            (Level::Zero, v) => Ok(v.clone()),
-            (u, Level::Zero) => Ok(u.clone()),
+            (Level::Zero, v) => v.clone(),
+            (u, Level::Zero) => u.clone(),
+            (u, v) if u == v => u.clone(),
             (Level::Succ(u_prev), Level::Succ(v_prev)) => {
-                Ok(Level::Succ(Box::new(max_level(u_prev, v_prev)?)))
+                Level::Succ(Box::new(max_level(u_prev, v_prev)))
             }
-            (u, v) if u == v => Ok(u.clone()),
-            _ => Err("symbolic universe max/imax is not supported yet".to_string()),
+            _ => Level::Max(Box::new(u.clone()), Box::new(v.clone())),
         }
     }
 
-    match v {
-        Level::Zero => Ok(Level::Zero),
-        _ => max_level(u, v),
+    match (u, v) {
+        (_, Level::Zero) => Level::Zero,
+        (Level::Zero, v) => v.clone(),
+        (u, v) if u == v => u.clone(),
+        (Level::Succ(u_prev), Level::Succ(v_prev)) => {
+            Level::Succ(Box::new(max_level(u_prev, v_prev)))
+        }
+        _ => Level::IMax(Box::new(u.clone()), Box::new(v.clone())),
     }
 }
 
@@ -77,7 +84,7 @@ impl LeanExpr {
 
                 match (domain_type, body_type) {
                     (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
-                        let result_level = imax(&level1, &level2)?;
+                        let result_level = imax(&level1, &level2);
                         Ok(LeanExpr::Sort(result_level))
                     }
                     _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),
