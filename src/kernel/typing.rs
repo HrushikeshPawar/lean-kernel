@@ -89,10 +89,6 @@ impl LeanExpr {
                             ));
                         }
 
-                        let mut new_context = Vec::with_capacity(context.len() + 1);
-                        new_context.push(*arg.clone());
-                        new_context.extend_from_slice(context);
-
                         body.instantiate_bvar0(arg)
                     }
                     _ => Err(
