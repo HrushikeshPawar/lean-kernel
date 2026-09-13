@@ -63,16 +63,14 @@ impl LeanExpr {
             }
             LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
             LeanExpr::Const(name, universes) => {
-                if !universes.is_empty() {
-                    return Err("Const with universe levels is not supported yet".to_string());
-                }
-
                 let definition = env
                     .iter()
                     .find(|def| &def.name == name)
                     .ok_or_else(|| format!("Constant {:?} not found in environment", name))?;
 
-                Ok(definition.ty.clone())
+                definition
+                    .ty
+                    .instantiate_level_params(&definition.level_params, universes)
             }
             LeanExpr::Pi(domain, body) => {
                 let domain_type = domain.infer_type_with_env_and_context(env, context)?;

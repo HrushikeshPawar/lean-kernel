@@ -7,10 +7,13 @@ impl LeanExpr {
             LeanExpr::BVar(_) => Ok(self.clone()),
             LeanExpr::Pi(_, _) => Ok(self.clone()),
             LeanExpr::Lambda(_, _) => Ok(self.clone()),
-            LeanExpr::Const(name, _) => {
+            LeanExpr::Const(name, universes) => {
                 if let Some(definition) = env.iter().find(|def| &def.name == name) {
-                    let result = definition.value.clone();
-                    result.whnf_with_env(env)
+                    let instantiated_value = definition
+                        .value
+                        .instantiate_level_params(&definition.level_params, universes)?;
+
+                    instantiated_value.whnf_with_env(env)
                 } else {
                     Ok(self.clone())
                 }

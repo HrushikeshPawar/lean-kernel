@@ -376,14 +376,113 @@ fn unknown_constant_fails() {
 }
 
 #[test]
-fn const_with_universe_levels_fails() {
-    let result = LeanExpr::Const(
-        Name::Str(Box::new(Name::Anonymous), "foo".to_string()),
-        vec![Level::Succ(Box::new(Level::Zero))],
-    )
-    .infer_type_with_env_and_context(&[], &[]);
+fn const_type_instantiates_universe_arguments() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
 
-    assert!(result.is_err());
+    // poly.{u} : Sort (u+1) := Sort u
+    let poly = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        level_params: vec![u],
+        ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Param(Name::Str(
+            Box::new(Name::Anonymous),
+            "u".to_string(),
+        ))))),
+        value: LeanExpr::Sort(Level::Param(Name::Str(
+            Box::new(Name::Anonymous),
+            "u".to_string(),
+        ))),
+    };
+
+    // Const(poly, [0]) must infer Sort 1.
+    let result = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        vec![Level::Zero],
+    )
+    .infer_type_with_env_and_context(&[poly], &[]);
+
+    assert_eq!(
+        result,
+        Ok(LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))))
+    );
+}
+
+#[test]
+fn const_universe_arity_mismatch_fails() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+
+    // poly.{u} : Sort (u+1) := Sort u
+    let poly = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        level_params: vec![u],
+        ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Param(Name::Str(
+            Box::new(Name::Anonymous),
+            "u".to_string(),
+        ))))),
+        value: LeanExpr::Sort(Level::Param(Name::Str(
+            Box::new(Name::Anonymous),
+            "u".to_string(),
+        ))),
+    };
+
+    // poly.{} supplies no universe argument.
+    let result = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        vec![],
+    )
+    .infer_type_with_env_and_context(&[poly], &[]);
+
+    assert!(result
+        .unwrap_err()
+        .contains("Universe argument count mismatch"));
+}
+
+#[test]
+fn whnf_instantiates_const_universe_then_delta_beta_reduces() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+    let two = Level::Succ(Box::new(Level::Succ(Box::new(Level::Zero))));
+
+    // id.{u} := λ α : Sort u, λ a : α, a
+    let id = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "id".to_string()),
+        level_params: vec![u],
+        ty: LeanExpr::Pi(
+            Box::new(LeanExpr::Sort(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string(),
+            )))),
+            Box::new(LeanExpr::Pi(
+                Box::new(LeanExpr::BVar(0)),
+                Box::new(LeanExpr::BVar(1)),
+            )),
+        ),
+        value: LeanExpr::Lambda(
+            Box::new(LeanExpr::Sort(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string(),
+            )))),
+            Box::new(LeanExpr::Lambda(
+                Box::new(LeanExpr::BVar(0)),
+                Box::new(LeanExpr::BVar(0)),
+            )),
+        ),
+    };
+
+    let type_ = LeanExpr::Sort(Level::Succ(Box::new(Level::Zero)));
+    let prop = LeanExpr::Sort(Level::Zero);
+
+    // id.{2} Type Prop must WHNF to Prop.
+    let expr = LeanExpr::Application(
+        Box::new(LeanExpr::Application(
+            Box::new(LeanExpr::Const(
+                Name::Str(Box::new(Name::Anonymous), "id".to_string()),
+                vec![two],
+            )),
+            Box::new(type_),
+        )),
+        Box::new(prop.clone()),
+    );
+
+    assert_eq!(expr.whnf_with_env(&[id]), Ok(prop));
 }
 
 #[test]
