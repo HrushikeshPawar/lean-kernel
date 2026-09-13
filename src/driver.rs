@@ -85,11 +85,6 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                 }
 
                 export::ExportRecord::Definition(record) => {
-                    if !record.level_params.is_empty() {
-                        eprintln!("Universe-polymorphic definitions are not supported yet");
-                        return ExitCode::from(2);
-                    }
-
                     if record.safety != export::Safety::Safe {
                         eprintln!("Non-safe definitions are not supported yet");
                         return ExitCode::from(2);
@@ -289,5 +284,37 @@ mod tests {
         );
 
         assert_eq!(run(Cursor::new(input)), ExitCode::from(1));
+    }
+
+    #[test]
+    fn definition_accepts_declared_universe_parameter() {
+        let input = concat!(
+            // Name 1 = u
+            r#"{"in":1,"str":{"pre":0,"str":"u"}}"#,
+            "\n",
+            // Name 2 = poly
+            r#"{"in":2,"str":{"pre":0,"str":"poly"}}"#,
+            "\n",
+            // Level 1 = u
+            r#"{"il":1,"param":1}"#,
+            "\n",
+            // Level 2 = u + 1
+            r#"{"il":2,"succ":1}"#,
+            "\n",
+            // Expr 0 = Sort (u + 1)
+            r#"{"ie":0,"sort":2}"#,
+            "\n",
+            // Expr 1 = Sort u
+            r#"{"ie":1,"sort":1}"#,
+            "\n",
+            // poly.{u} : Sort (u + 1) := Sort u
+            //
+            // Same shape as definition_rejects_undeclared_universe_parameter,
+            // but levelParams declares u, so the definition is accepted.
+            r#"{"def":{"all":[2],"hints":"opaque","levelParams":[1],"name":2,"safety":"safe","type":0,"value":1}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(0));
     }
 }
