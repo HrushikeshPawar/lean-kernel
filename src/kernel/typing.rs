@@ -80,7 +80,13 @@ impl LeanExpr {
                 new_context.extend_from_slice(context);
                 let body_type = body.infer_type_with_env_and_context(env, &new_context)?;
 
-                match (domain_type, body_type) {
+                // Inferred Pi operand types may be neutral terms (e.g. a
+                // delta-unfoldable constant application) sitting over a
+                // sort; reduce to WHNF before requiring a sort.
+                let domain_sort = domain_type.whnf_with_env(env)?;
+                let body_sort = body_type.whnf_with_env(env)?;
+
+                match (domain_sort, body_sort) {
                     (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
                         let result_level = imax(&level1, &level2);
                         Ok(LeanExpr::Sort(result_level))

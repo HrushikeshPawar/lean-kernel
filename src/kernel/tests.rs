@@ -562,6 +562,67 @@ fn whnf_beta_reduces_head_application() {
 }
 
 #[test]
+fn pi_domain_type_acting_as_sort_via_whnf_is_accepted() {
+    // id.{u} := λ α : Sort u, λ a : α, a
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+    let id = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "id".to_string()),
+        level_params: vec![u],
+        ty: LeanExpr::Pi(
+            Box::new(LeanExpr::Sort(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string(),
+            )))),
+            Box::new(LeanExpr::Pi(
+                Box::new(LeanExpr::BVar(0)),
+                Box::new(LeanExpr::BVar(1)),
+            )),
+        ),
+        value: LeanExpr::Lambda(
+            Box::new(LeanExpr::Sort(Level::Param(Name::Str(
+                Box::new(Name::Anonymous),
+                "u".to_string(),
+            )))),
+            Box::new(LeanExpr::Lambda(
+                Box::new(LeanExpr::BVar(0)),
+                Box::new(LeanExpr::BVar(0)),
+            )),
+        ),
+    };
+
+    let two = Level::Succ(Box::new(Level::Succ(Box::new(Level::Zero))));
+    let type_ = LeanExpr::Sort(Level::Succ(Box::new(Level::Zero)));
+    let prop = LeanExpr::Sort(Level::Zero);
+
+    let id_type_prop = LeanExpr::Application(
+        Box::new(LeanExpr::Application(
+            Box::new(LeanExpr::Const(
+                Name::Str(Box::new(Name::Anonymous), "id".to_string()),
+                vec![two],
+            )),
+            Box::new(type_),
+        )),
+        Box::new(prop.clone()),
+    );
+
+    // forallSortWhnf : Prop := Π (p : id.{2} Type Prop), Π (a : p), p
+    let definition = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "forallSortWhnf".to_string()),
+        level_params: vec![],
+        ty: prop,
+        value: LeanExpr::Pi(
+            Box::new(id_type_prop),
+            Box::new(LeanExpr::Pi(
+                Box::new(LeanExpr::BVar(0)),
+                Box::new(LeanExpr::BVar(1)),
+            )),
+        ),
+    };
+
+    assert_eq!(definition.check_with_env(&[id]), Ok(true));
+}
+
+#[test]
 fn whnf_delta_then_beta_reduces_const_type() {
     let type_ = LeanExpr::Sort(Level::Succ(Box::new(Level::Zero)));
     let prop = LeanExpr::Sort(Level::Zero);
