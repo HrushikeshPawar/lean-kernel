@@ -82,6 +82,21 @@ fn parses_level_succ_record() {
 }
 
 #[test]
+fn parses_level_param_record() {
+    let value: Value = serde_json::from_str(r#"{"il":1,"param":2}"#).unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::LevelParam(LevelParamRecord {
+            id: 1,
+            param: 2,
+        }))
+    );
+}
+
+#[test]
 fn parses_expr_sort_record() {
     let value: Value = serde_json::from_str(r#"{"ie":0,"sort":1}"#).unwrap();
 

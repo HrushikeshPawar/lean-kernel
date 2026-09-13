@@ -65,7 +65,7 @@ fn prop_to_prop_pi_has_type_type() {
 fn imax_is_zero_when_second_level_is_zero() {
     let one = Level::Succ(Box::new(Level::Zero));
 
-    assert_eq!(imax(&one, &Level::Zero), Level::Zero);
+    assert_eq!(imax(&one, &Level::Zero), Ok(Level::Zero));
 }
 
 #[test]
@@ -73,7 +73,32 @@ fn imax_uses_max_when_second_level_is_nonzero() {
     let one = Level::Succ(Box::new(Level::Zero));
     let two = Level::Succ(Box::new(one.clone()));
 
-    assert_eq!(imax(&two, &one), two);
+    assert_eq!(imax(&two, &one), Ok(two));
+}
+
+#[test]
+fn imax_of_zero_and_param_is_param() {
+    let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+
+    assert_eq!(imax(&Level::Zero, &param), Ok(param));
+}
+
+#[test]
+fn imax_of_param_with_itself_is_param() {
+    let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+
+    assert_eq!(imax(&param, &param), Ok(param));
+}
+
+#[test]
+fn imax_with_symbolic_succ_and_param_is_unsupported() {
+    let param = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let one = Level::Succ(Box::new(Level::Zero));
+
+    assert_eq!(
+        imax(&one, &param),
+        Err("symbolic universe max/imax is not supported yet".to_string())
+    );
 }
 
 #[test]

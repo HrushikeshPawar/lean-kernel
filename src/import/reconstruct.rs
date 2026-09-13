@@ -1,8 +1,8 @@
 use super::{ExprTable, LevelTable, NameTable};
 use crate::export::{
     DefinitionHints, DefinitionRecord, ExprAppRecord, ExprBVarRecord, ExprConstRecord,
-    ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelSuccRecord, NameNumRecord, NameStrRecord,
-    Safety,
+    ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord,
+    NameNumRecord, NameStrRecord, Safety,
 };
 use crate::kernel::{LeanDefinition, LeanExpr, Level, Name};
 
@@ -47,6 +47,7 @@ impl NameTable {
         Ok(())
     }
 }
+
 impl LevelTable {
     pub fn add_succ(&mut self, record: &LevelSuccRecord) -> Result<(), String> {
         if record.id != self.levels.len() {
@@ -66,7 +67,30 @@ impl LevelTable {
         self.levels.push(Level::Succ(Box::new(prev_level)));
         Ok(())
     }
+
+    pub fn add_param(
+        &mut self,
+        record: &LevelParamRecord,
+        names: &NameTable,
+    ) -> Result<(), String> {
+        if record.id != self.levels.len() {
+            return Err(format!(
+                "Non-sequential level record id: expected {}, got {}",
+                self.levels.len(),
+                record.id
+            ));
+        }
+
+        let param_name = names
+            .get(record.param)
+            .ok_or_else(|| format!("Invalid parameter name index: {}", record.param))?
+            .clone();
+
+        self.levels.push(Level::Param(param_name));
+        Ok(())
+    }
 }
+
 impl ExprTable {
     pub fn add_sort(&mut self, record: &ExprSortRecord, levels: &LevelTable) -> Result<(), String> {
         if record.id != self.exprs.len() {
@@ -303,6 +327,7 @@ impl ExprTable {
         Ok(())
     }
 }
+
 pub fn reconstruct_definition(
     record: &DefinitionRecord,
     names: &NameTable,

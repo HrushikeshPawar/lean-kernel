@@ -63,6 +63,13 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                     }
                 }
 
+                export::ExportRecord::LevelParam(record) => {
+                    if let Err(error) = state.levels.add_param(&record, &state.names) {
+                        eprintln!("Invalid level record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
                 export::ExportRecord::ExprSort(record) => {
                     if let Err(error) = state.exprs.add_sort(&record, &state.levels) {
                         eprintln!("Invalid expression record on line {line_number}: {error}");

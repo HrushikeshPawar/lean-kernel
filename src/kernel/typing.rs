@@ -1,19 +1,21 @@
 use super::debruijn::lookup_bvar_type;
 use super::{LeanDefinition, LeanExpr, Level};
 
-pub(super) fn imax(u: &Level, v: &Level) -> Level {
-    fn max_level(u: &Level, v: &Level) -> Level {
+pub(super) fn imax(u: &Level, v: &Level) -> Result<Level, String> {
+    fn max_level(u: &Level, v: &Level) -> Result<Level, String> {
         match (u, v) {
-            (Level::Zero, v) => v.clone(),
-            (u, Level::Zero) => u.clone(),
+            (Level::Zero, v) => Ok(v.clone()),
+            (u, Level::Zero) => Ok(u.clone()),
             (Level::Succ(u_prev), Level::Succ(v_prev)) => {
-                Level::Succ(Box::new(max_level(u_prev, v_prev)))
+                Ok(Level::Succ(Box::new(max_level(u_prev, v_prev)?)))
             }
+            (u, v) if u == v => Ok(u.clone()),
+            _ => Err("symbolic universe max/imax is not supported yet".to_string()),
         }
     }
 
     match v {
-        Level::Zero => Level::Zero,
+        Level::Zero => Ok(Level::Zero),
         _ => max_level(u, v),
     }
 }
@@ -52,7 +54,7 @@ impl LeanExpr {
 
                 match (domain_type, body_type) {
                     (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => {
-                        let result_level = imax(&level1, &level2);
+                        let result_level = imax(&level1, &level2)?;
                         Ok(LeanExpr::Sort(result_level))
                     }
                     _ => Err("Pi type inference failed: domain or body is not a Sort".to_string()),

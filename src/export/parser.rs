@@ -56,6 +56,13 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         return Ok(Some(ExportRecord::LevelSucc(record)));
     }
 
+    if object.contains_key("param") {
+        let record =
+            serde_json::from_value::<LevelParamRecord>(value).map_err(|error| error.to_string())?;
+
+        return Ok(Some(ExportRecord::LevelParam(record)));
+    }
+
     if object.contains_key("sort") {
         let record =
             serde_json::from_value::<ExprSortRecord>(value).map_err(|error| error.to_string())?;

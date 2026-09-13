@@ -8,6 +8,7 @@ pub enum Name {
 pub enum Level {
     Zero,
     Succ(Box<Level>),
+    Param(Name),
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum LeanExpr {

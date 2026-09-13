@@ -86,6 +86,15 @@ pub struct LevelSuccRecord {
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct LevelParamRecord {
+    #[serde(rename = "il")]
+    pub id: usize,
+
+    pub param: usize,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ExprSortRecord {
     #[serde(rename = "ie")]
     pub id: usize,
@@ -244,6 +253,7 @@ pub enum ExportRecord {
     NameStr(NameStrRecord),
     NameNum(NameNumRecord),
     LevelSucc(LevelSuccRecord),
+    LevelParam(LevelParamRecord),
     ExprSort(ExprSortRecord),
     ExprForall(ExprForallRecord),
     ExprLam(ExprLamRecord),

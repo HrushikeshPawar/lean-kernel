@@ -2,8 +2,8 @@ use super::*;
 use crate::export::{
     BinderInfo, DefinitionHints, DefinitionRecord, ExprAppPayload, ExprAppRecord, ExprBVarRecord,
     ExprConstPayload, ExprConstRecord, ExprForallPayload, ExprForallRecord, ExprLamPayload,
-    ExprLamRecord, ExprSortRecord, LevelSuccRecord, NameNumPayload, NameNumRecord, NameStrPayload,
-    NameStrRecord, Safety,
+    ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord, NameNumPayload,
+    NameNumRecord, NameStrPayload, NameStrRecord, Safety,
 };
 use crate::kernel::{LeanExpr, Level, Name};
 
@@ -195,6 +195,47 @@ fn level_record_rejects_non_sequential_id() {
     };
 
     assert!(table.add_succ(&record).is_err());
+}
+
+#[test]
+fn reconstructs_level_param() {
+    let mut names = NameTable::new();
+
+    names
+        .add_str(&NameStrRecord {
+            id: 1,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "u".to_string(),
+            },
+        })
+        .unwrap();
+
+    let mut levels = LevelTable::new();
+
+    let record = LevelParamRecord { id: 1, param: 1 };
+
+    levels.add_param(&record, &names).unwrap();
+
+    assert_eq!(
+        levels.get(1),
+        Some(&Level::Param(Name::Str(
+            Box::new(Name::Anonymous),
+            "u".to_string(),
+        )))
+    );
+}
+
+#[test]
+fn level_param_rejects_unknown_name() {
+    let names = NameTable::new();
+    let mut levels = LevelTable::new();
+
+    let record = LevelParamRecord { id: 1, param: 99 };
+
+    let error = levels.add_param(&record, &names).unwrap_err();
+
+    assert_eq!(error, "Invalid parameter name index: 99");
 }
 
 #[test]

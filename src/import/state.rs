@@ -21,6 +21,7 @@ impl NameTable {
         self.names.get(index)
     }
 }
+
 #[derive(Debug)]
 pub struct LevelTable {
     pub(super) levels: Vec<Level>,
@@ -42,10 +43,12 @@ impl LevelTable {
         self.levels.get(id)
     }
 }
+
 #[derive(Debug)]
 pub struct ExprTable {
     pub(super) exprs: Vec<LeanExpr>,
 }
+
 impl Default for ExprTable {
     fn default() -> Self {
         Self::new()
@@ -60,6 +63,7 @@ impl ExprTable {
         self.exprs.get(id)
     }
 }
+
 #[derive(Debug)]
 pub struct ImportState {
     pub names: NameTable,
