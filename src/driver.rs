@@ -9,7 +9,7 @@ use crate::{
 
 pub fn run(reader: impl BufRead) -> ExitCode {
     let mut state = import::ImportState::new();
-    let mut checked_declaration = false;
+    let mut checked_kind: Option<&'static str> = None;
     let mut declarations = Vec::<LeanDeclaration>::new();
 
     for (line_index, line_result) in reader.lines().enumerate() {
@@ -107,7 +107,7 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                             let check_status = definition.check_with_env(&declarations);
                             match check_status {
                                 Ok(true) => {
-                                    checked_declaration = true;
+                                    checked_kind = Some("Definition");
 
                                     // If duplicate in definition raise
                                     if declarations
@@ -191,7 +191,7 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                                     return ExitCode::from(2);
                                 }
                                 Ok(true) => {
-                                    checked_declaration = true;
+                                    checked_kind = Some("Axiom");
 
                                     // If duplicate in axiom raise
                                     if declarations.iter().any(|decl| decl.name() == &axiom.name) {
@@ -218,7 +218,7 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                             let check_status = theorem.check_with_env(&declarations);
                             match check_status {
                                 Ok(true) => {
-                                    checked_declaration = true;
+                                    checked_kind = Some("Theorem");
 
                                     if declarations.iter().any(|decl| decl.name() == &theorem.name)
                                     {
@@ -257,8 +257,8 @@ pub fn run(reader: impl BufRead) -> ExitCode {
         }
     }
 
-    if checked_declaration {
-        println!("Definition is valid");
+    if let Some(kind) = checked_kind {
+        println!("{kind} is valid");
         ExitCode::from(0)
     } else {
         ExitCode::from(2)
