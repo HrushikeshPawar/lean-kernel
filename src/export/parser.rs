@@ -87,5 +87,11 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         return Ok(Some(ExportRecord::Axiom(record.axiom)));
     }
 
+    if object.contains_key("thm") {
+        let record =
+            serde_json::from_value::<TheoremEnvelope>(value).map_err(|error| error.to_string())?;
+        return Ok(Some(ExportRecord::Theorem(record.theorem)));
+    }
+
     Ok(None)
 }

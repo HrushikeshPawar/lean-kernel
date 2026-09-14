@@ -268,6 +268,30 @@ pub struct AxiomRecord {
     pub type_id: usize,
 }
 
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TheoremEnvelope {
+    #[serde(rename = "thm")]
+    pub theorem: TheoremRecord,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TheoremRecord {
+    pub all: Vec<usize>,
+
+    #[serde(rename = "levelParams")]
+    pub level_params: Vec<usize>,
+
+    pub name: usize,
+
+    #[serde(rename = "type")]
+    pub type_id: usize,
+
+    #[serde(rename = "value")]
+    pub value_id: usize,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExportRecord {
     Meta(MetaRecord),
@@ -283,4 +307,5 @@ pub enum ExportRecord {
     ExprApp(ExprAppRecord),
     Definition(DefinitionRecord),
     Axiom(AxiomRecord),
+    Theorem(TheoremRecord),
 }

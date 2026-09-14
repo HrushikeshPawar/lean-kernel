@@ -18,6 +18,8 @@ impl LeanExpr {
                 }
                 // Axioms are neutral: they never unfold.
                 Some(LeanDeclaration::Axiom(_)) => Ok(self.clone()),
+                // Theorems are stored and type-checked, but opaque: never unfold.
+                Some(LeanDeclaration::Theorem(_)) => Ok(self.clone()),
                 None => Ok(self.clone()),
             },
             LeanExpr::Application(function, arg) => {

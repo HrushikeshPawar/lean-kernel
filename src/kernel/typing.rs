@@ -1,5 +1,5 @@
 use super::debruijn::lookup_bvar_type;
-use super::{LeanAxiom, LeanDeclaration, LeanDefinition, LeanExpr, Level, Name};
+use super::{LeanAxiom, LeanDeclaration, LeanDefinition, LeanExpr, LeanTheorem, Level, Name};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeError {
@@ -221,5 +221,39 @@ impl LeanAxiom {
         }
 
         Ok(true)
+    }
+}
+
+impl LeanTheorem {
+    pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
+        if !expr_levels_in_scope(&self.ty, &self.level_params)
+            || !expr_levels_in_scope(&self.value, &self.level_params)
+        {
+            return Ok(false);
+        }
+
+        let inferred_ty_type = match self.ty.infer_type_with_env_and_context(env, &[]) {
+            Ok(ty) => ty,
+            Err(TypeError::Invalid(_)) => return Ok(false),
+            Err(TypeError::Failure(error)) => return Err(error),
+        };
+
+        // The type of a theorem has to be a proposition.
+        let is_prop = match inferred_ty_type.whnf_with_env(env)? {
+            LeanExpr::Sort(level) => level == Level::Zero,
+            _ => false,
+        };
+
+        if !is_prop {
+            return Ok(false);
+        }
+
+        let inferred_value_type = match self.value.infer_type_with_env_and_context(env, &[]) {
+            Ok(ty) => ty,
+            Err(TypeError::Invalid(_)) => return Ok(false),
+            Err(TypeError::Failure(error)) => return Err(error),
+        };
+
+        inferred_value_type.def_eq_with_env(&self.ty, env)
     }
 }

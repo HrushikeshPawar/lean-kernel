@@ -208,6 +208,41 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                         }
                     }
                 }
+
+                export::ExportRecord::Theorem(record) => {
+                    let reconstructed_theorem =
+                        import::reconstruct_theorem(&record, &state.names, &state.exprs);
+
+                    match reconstructed_theorem {
+                        Ok(theorem) => {
+                            let check_status = theorem.check_with_env(&declarations);
+                            match check_status {
+                                Ok(true) => {
+                                    checked_declaration = true;
+
+                                    if declarations.iter().any(|decl| decl.name() == &theorem.name)
+                                    {
+                                        eprintln!("Duplicate theorem name: {:?}", theorem.name);
+                                        return ExitCode::from(1);
+                                    }
+                                    declarations.push(LeanDeclaration::Theorem(theorem));
+                                }
+                                Ok(false) => {
+                                    eprintln!("Theorem is invalid");
+                                    return ExitCode::from(1);
+                                }
+                                Err(error) => {
+                                    eprintln!("Unable to check theorem: {error}");
+                                    return ExitCode::from(2);
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("Invalid theorem record on line {line_number}: {error}");
+                            return ExitCode::from(3);
+                        }
+                    }
+                }
             },
 
             Ok(None) => {
@@ -412,5 +447,97 @@ mod tests {
         );
 
         assert_eq!(run(Cursor::new(input)), ExitCode::from(0));
+    }
+
+    #[test]
+    fn theorem_with_non_prop_type_is_rejected() {
+        // Mirrors tutorial/012_nonPropThm: type is Sort 0 (Prop), whose type is
+        // Sort 1, so the theorem's type is not a proposition.
+        let input = concat!(
+            r#"{"in":1,"str":{"pre":0,"str":"nonPropThm"}}"#,
+            "\n",
+            r#"{"in":2,"str":{"pre":0,"str":"x"}}"#,
+            "\n",
+            r#"{"ie":0,"sort":0}"#,
+            "\n",
+            r#"{"bvar":0,"ie":1}"#,
+            "\n",
+            r#"{"forallE":{"binderInfo":"default","body":1,"name":2,"type":0},"ie":2}"#,
+            "\n",
+            r#"{"thm":{"all":[1],"levelParams":[],"name":1,"type":0,"value":2}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(1));
+    }
+
+    #[test]
+    fn valid_theorem_stream_exits_zero() {
+        // pImpliesP : ∀ (p : Prop), p → p := fun p h => h
+        let input = concat!(
+            // Name 1 = pImpliesP, Name 2 = p, Name 3 = h
+            r#"{"in":1,"str":{"pre":0,"str":"pImpliesP"}}"#,
+            "\n",
+            r#"{"in":2,"str":{"pre":0,"str":"p"}}"#,
+            "\n",
+            r#"{"in":3,"str":{"pre":0,"str":"h"}}"#,
+            "\n",
+            // Expr 0 = Prop
+            r#"{"ie":0,"sort":0}"#,
+            "\n",
+            // Expr 1 = BVar 0 (inner arrow domain: p)
+            r#"{"bvar":0,"ie":1}"#,
+            "\n",
+            // Expr 2 = BVar 1 (inner arrow codomain: p)
+            r#"{"bvar":1,"ie":2}"#,
+            "\n",
+            // Expr 3 = p → p
+            r#"{"forallE":{"binderInfo":"default","body":2,"name":3,"type":1},"ie":3}"#,
+            "\n",
+            // Expr 4 = ∀ (p : Prop), p → p
+            r#"{"forallE":{"binderInfo":"default","body":3,"name":2,"type":0},"ie":4}"#,
+            "\n",
+            // Expr 5 = BVar 0 (result h)
+            r#"{"bvar":0,"ie":5}"#,
+            "\n",
+            // Expr 6 = fun h : p => h
+            r#"{"lam":{"binderInfo":"default","body":5,"name":3,"type":1},"ie":6}"#,
+            "\n",
+            // Expr 7 = fun p : Prop => fun h : p => h
+            r#"{"lam":{"binderInfo":"default","body":6,"name":2,"type":0},"ie":7}"#,
+            "\n",
+            r#"{"thm":{"all":[0],"levelParams":[],"name":1,"type":4,"value":7}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(0));
+    }
+
+    #[test]
+    fn self_referential_theorem_is_rejected() {
+        // Mirrors tutorial/014_selfProof: value references the theorem itself.
+        let input = concat!(
+            // Name 1 = selfProof, Name 2 = p
+            r#"{"in":1,"str":{"pre":0,"str":"selfProof"}}"#,
+            "\n",
+            r#"{"in":2,"str":{"pre":0,"str":"p"}}"#,
+            "\n",
+            // Expr 0 = Prop
+            r#"{"ie":0,"sort":0}"#,
+            "\n",
+            // Expr 1 = BVar 0 (p)
+            r#"{"bvar":0,"ie":1}"#,
+            "\n",
+            // Expr 2 = ∀ p : Prop, p
+            r#"{"forallE":{"binderInfo":"default","body":1,"name":2,"type":0},"ie":2}"#,
+            "\n",
+            // Expr 3 = const selfProof (not yet declared)
+            r#"{"const":{"name":1,"us":[]},"ie":3}"#,
+            "\n",
+            r#"{"thm":{"all":[0],"levelParams":[],"name":1,"type":2,"value":3}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(1));
     }
 }
