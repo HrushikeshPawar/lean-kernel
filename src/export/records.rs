@@ -247,6 +247,27 @@ pub enum DefinitionHints {
     Regular { regular: usize },
 }
 
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AxiomEnvelope {
+    pub axiom: AxiomRecord,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AxiomRecord {
+    #[serde(rename = "isUnsafe")]
+    pub is_unsafe: bool,
+
+    #[serde(rename = "levelParams")]
+    pub level_params: Vec<usize>,
+
+    pub name: usize,
+
+    #[serde(rename = "type")]
+    pub type_id: usize,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExportRecord {
     Meta(MetaRecord),
@@ -261,4 +282,5 @@ pub enum ExportRecord {
     ExprConst(ExprConstRecord),
     ExprApp(ExprAppRecord),
     Definition(DefinitionRecord),
+    Axiom(AxiomRecord),
 }

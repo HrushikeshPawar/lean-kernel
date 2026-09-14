@@ -1,24 +1,25 @@
-use crate::kernel::{LeanDefinition, LeanExpr};
+use crate::kernel::{LeanDeclaration, LeanExpr};
 
 impl LeanExpr {
-    pub fn whnf_with_env(&self, env: &[LeanDefinition]) -> Result<LeanExpr, String> {
+    pub fn whnf_with_env(&self, env: &[LeanDeclaration]) -> Result<LeanExpr, String> {
         match self {
             LeanExpr::Sort(_) => Ok(self.clone()),
             LeanExpr::BVar(_) => Ok(self.clone()),
             LeanExpr::Pi(_, _) => Ok(self.clone()),
             LeanExpr::Lambda(_, _) => Ok(self.clone()),
-            LeanExpr::Const(name, universes) => {
-                if let Some(definition) = env.iter().find(|def| &def.name == name) {
+            LeanExpr::Const(name, universes) => match env.iter().find(|decl| decl.name() == name) {
+                Some(LeanDeclaration::Definition(definition)) => {
                     let instantiated_value = definition
                         .value
                         .instantiate_level_params(&definition.level_params, universes)
                         .map_err(|error| error.to_string())?;
 
                     instantiated_value.whnf_with_env(env)
-                } else {
-                    Ok(self.clone())
                 }
-            }
+                // Axioms are neutral: they never unfold.
+                Some(LeanDeclaration::Axiom(_)) => Ok(self.clone()),
+                None => Ok(self.clone()),
+            },
             LeanExpr::Application(function, arg) => {
                 let reduced_function = function.whnf_with_env(env)?;
                 match reduced_function {
@@ -38,7 +39,7 @@ impl LeanExpr {
     pub fn def_eq_with_env(
         &self,
         other: &LeanExpr,
-        env: &[LeanDefinition],
+        env: &[LeanDeclaration],
     ) -> Result<bool, String> {
         let self_whnf = self.whnf_with_env(env)?;
         let other_whnf = other.whnf_with_env(env)?;

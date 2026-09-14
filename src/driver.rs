@@ -4,13 +4,13 @@ use std::{io::BufRead, process::ExitCode};
 use crate::{
     export,
     import::{self, reconstruct_definition},
-    kernel::LeanDefinition,
+    kernel::LeanDeclaration,
 };
 
 pub fn run(reader: impl BufRead) -> ExitCode {
     let mut state = import::ImportState::new();
-    let mut checked_definition = false;
-    let mut definitions = Vec::<LeanDefinition>::new();
+    let mut checked_declaration = false;
+    let mut declarations = Vec::<LeanDeclaration>::new();
 
     for (line_index, line_result) in reader.lines().enumerate() {
         let Some(line_number) = line_index.checked_add(1) else {
@@ -104,13 +104,16 @@ pub fn run(reader: impl BufRead) -> ExitCode {
 
                     match reconstructed_definition {
                         Ok(definition) => {
-                            let check_status = definition.check_with_env(&definitions);
+                            let check_status = definition.check_with_env(&declarations);
                             match check_status {
                                 Ok(true) => {
-                                    checked_definition = true;
+                                    checked_declaration = true;
 
                                     // If duplicate in definition raise
-                                    if definitions.iter().any(|def| def.name == definition.name) {
+                                    if declarations
+                                        .iter()
+                                        .any(|decl| decl.name() == &definition.name)
+                                    {
                                         eprintln!(
                                             "Duplicate definition name: {:?}",
                                             definition.name
@@ -118,7 +121,7 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                                         return ExitCode::from(1);
                                     }
 
-                                    definitions.push(definition);
+                                    declarations.push(LeanDeclaration::Definition(definition));
                                 }
                                 Ok(false) => {
                                     eprintln!("Definition is invalid");
@@ -165,6 +168,46 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                         return ExitCode::from(3);
                     }
                 }
+
+                export::ExportRecord::Axiom(record) => {
+                    if record.is_unsafe {
+                        eprintln!("Non-safe axioms are not supported yet");
+                        return ExitCode::from(2);
+                    }
+
+                    let reconstructed_axiom =
+                        import::reconstruct_axiom(&record, &state.names, &state.exprs);
+
+                    match reconstructed_axiom {
+                        Ok(axiom) => {
+                            let check_status = axiom.check_with_env(&declarations);
+                            match check_status {
+                                Ok(false) => {
+                                    eprintln!("Axiom is invalid");
+                                    return ExitCode::from(1);
+                                }
+                                Err(error) => {
+                                    eprintln!("Unable to check axiom: {error}");
+                                    return ExitCode::from(2);
+                                }
+                                Ok(true) => {
+                                    checked_declaration = true;
+
+                                    // If duplicate in axiom raise
+                                    if declarations.iter().any(|decl| decl.name() == &axiom.name) {
+                                        eprintln!("Duplicate axiom name: {:?}", axiom.name);
+                                        return ExitCode::from(1);
+                                    }
+                                    declarations.push(LeanDeclaration::Axiom(axiom));
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("Invalid axiom record on line {line_number}: {error}");
+                            return ExitCode::from(3);
+                        }
+                    }
+                }
             },
 
             Ok(None) => {
@@ -173,13 +216,13 @@ pub fn run(reader: impl BufRead) -> ExitCode {
             }
 
             Err(error) => {
-                eprintln!("Malformed export record on line {line_number}: {error}");
+                eprintln!("Invalid record on line {line_number}: {error}");
                 return ExitCode::from(3);
             }
         }
     }
 
-    if checked_definition {
+    if checked_declaration {
         println!("Definition is valid");
         ExitCode::from(0)
     } else {
@@ -345,6 +388,26 @@ mod tests {
             "\n",
             // poly.{u} : Sort (u + 1) := Sort u
             r#"{"def":{"all":[2],"hints":{"regular":1},"levelParams":[1],"name":2,"safety":"safe","type":0,"value":1}}"#,
+            "\n",
+        );
+
+        assert_eq!(run(Cursor::new(input)), ExitCode::from(0));
+    }
+
+    #[test]
+    fn valid_axiom_stream_exits_zero() {
+        let input = concat!(
+            // Name 1 = A
+            r#"{"in":1,"str":{"pre":0,"str":"A"}}"#,
+            "\n",
+            // Level 1 = Succ(Zero), i.e. Type
+            r#"{"il":1,"succ":0}"#,
+            "\n",
+            // Expr 0 = Sort (Succ Zero) = Type
+            r#"{"ie":0,"sort":1}"#,
+            "\n",
+            // axiom A : Type
+            r#"{"axiom":{"isUnsafe":false,"levelParams":[],"name":1,"type":0}}"#,
             "\n",
         );
 

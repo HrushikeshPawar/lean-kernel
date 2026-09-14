@@ -1,5 +1,5 @@
 use super::debruijn::lookup_bvar_type;
-use super::{LeanDefinition, LeanExpr, Level, Name};
+use super::{LeanAxiom, LeanDeclaration, LeanDefinition, LeanExpr, Level, Name};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeError {
@@ -77,7 +77,7 @@ pub(super) fn imax(u: &Level, v: &Level) -> Level {
 impl LeanExpr {
     pub fn infer_type_with_env_and_context(
         &self,
-        env: &[LeanDefinition],
+        env: &[LeanDeclaration],
         context: &[LeanExpr],
     ) -> Result<LeanExpr, TypeError> {
         match self {
@@ -87,13 +87,13 @@ impl LeanExpr {
             }
             LeanExpr::BVar(index) => lookup_bvar_type(context, *index),
             LeanExpr::Const(name, universes) => {
-                let definition = env.iter().find(|def| &def.name == name).ok_or_else(|| {
+                let declaration = env.iter().find(|decl| decl.name() == name).ok_or_else(|| {
                     TypeError::Invalid(format!("Constant {:?} not found in environment", name))
                 })?;
 
-                definition
-                    .ty
-                    .instantiate_level_params(&definition.level_params, universes)
+                declaration
+                    .ty()
+                    .instantiate_level_params(declaration.level_params(), universes)
             }
             LeanExpr::Pi(domain, body) => {
                 let domain_type = domain.infer_type_with_env_and_context(env, context)?;
@@ -173,7 +173,7 @@ impl LeanExpr {
 }
 
 impl LeanDefinition {
-    pub fn check_with_env(&self, env: &[LeanDefinition]) -> Result<bool, String> {
+    pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
         if !expr_levels_in_scope(&self.ty, &self.level_params)
             || !expr_levels_in_scope(&self.value, &self.level_params)
         {
@@ -201,5 +201,25 @@ impl LeanDefinition {
 
     pub fn check(&self) -> Result<bool, String> {
         self.check_with_env(&[])
+    }
+}
+
+impl LeanAxiom {
+    pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
+        if !expr_levels_in_scope(&self.ty, &self.level_params) {
+            return Ok(false);
+        }
+
+        let inferred_ty_type = match self.ty.infer_type_with_env_and_context(env, &[]) {
+            Ok(ty) => ty,
+            Err(TypeError::Invalid(_)) => return Ok(false),
+            Err(TypeError::Failure(error)) => return Err(error),
+        };
+
+        if !matches!(inferred_ty_type, LeanExpr::Sort(_)) {
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 }

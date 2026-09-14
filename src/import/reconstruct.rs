@@ -1,10 +1,10 @@
 use super::{ExprTable, LevelTable, NameTable};
 use crate::export::{
-    DefinitionHints, DefinitionRecord, ExprAppRecord, ExprBVarRecord, ExprConstRecord,
+    AxiomRecord, DefinitionHints, DefinitionRecord, ExprAppRecord, ExprBVarRecord, ExprConstRecord,
     ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord,
     NameNumRecord, NameStrRecord, Safety,
 };
-use crate::kernel::{LeanDefinition, LeanExpr, Level, Name};
+use crate::kernel::{LeanAxiom, LeanDefinition, LeanExpr, Level, Name};
 
 impl NameTable {
     pub fn add_str(&mut self, record: &NameStrRecord) -> Result<(), String> {
@@ -372,5 +372,36 @@ pub fn reconstruct_definition(
         level_params,
         ty,
         value,
+    })
+}
+
+pub fn reconstruct_axiom(
+    record: &AxiomRecord,
+    names: &NameTable,
+    exprs: &ExprTable,
+) -> Result<LeanAxiom, String> {
+    let name = names
+        .get(record.name)
+        .ok_or_else(|| format!("Invalid name index: {}", record.name))?
+        .clone();
+
+    let ty = exprs
+        .get(record.type_id)
+        .ok_or_else(|| format!("Invalid type expression index: {}", record.type_id))?
+        .clone();
+
+    let mut level_params = Vec::with_capacity(record.level_params.len());
+    for &param_id in &record.level_params {
+        let param = names
+            .get(param_id)
+            .ok_or_else(|| format!("Invalid level parameter name index: {}", param_id))?
+            .clone();
+        level_params.push(param);
+    }
+
+    Ok(LeanAxiom {
+        name,
+        level_params,
+        ty,
     })
 }

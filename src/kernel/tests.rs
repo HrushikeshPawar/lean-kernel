@@ -1,5 +1,9 @@
 use super::typing::imax;
-use super::{LeanDefinition, LeanExpr, Level, Name};
+use super::{LeanAxiom, LeanDeclaration, LeanDefinition, LeanExpr, Level, Name};
+
+fn declaration(def: LeanDefinition) -> LeanDeclaration {
+    LeanDeclaration::Definition(def)
+}
 
 #[test]
 fn prop_has_type_type() {
@@ -350,7 +354,7 @@ fn constant_infers_type_from_environment() {
         value: LeanExpr::Sort(Level::Zero),
     };
 
-    let env = vec![foo];
+    let env = vec![declaration(foo)];
 
     let result = LeanExpr::Const(
         Name::Str(Box::new(Name::Anonymous), "foo".to_string()),
@@ -398,7 +402,7 @@ fn const_type_instantiates_universe_arguments() {
         Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
         vec![Level::Zero],
     )
-    .infer_type_with_env_and_context(&[poly], &[]);
+    .infer_type_with_env_and_context(&[declaration(poly)], &[]);
 
     assert_eq!(
         result,
@@ -429,7 +433,7 @@ fn const_universe_arity_mismatch_fails() {
         Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
         vec![],
     )
-    .infer_type_with_env_and_context(&[poly], &[]);
+    .infer_type_with_env_and_context(&[declaration(poly)], &[]);
 
     assert!(
         result
@@ -485,7 +489,7 @@ fn whnf_instantiates_const_universe_then_delta_beta_reduces() {
         Box::new(prop.clone()),
     );
 
-    assert_eq!(expr.whnf_with_env(&[id]), Ok(prop));
+    assert_eq!(expr.whnf_with_env(&[declaration(id)]), Ok(prop));
 }
 
 #[test]
@@ -546,7 +550,7 @@ fn later_definition_can_reference_prior_definition() {
         value: LeanExpr::Const(foo_name, vec![]),
     };
 
-    assert_eq!(bar.check_with_env(&[foo]), Ok(true));
+    assert_eq!(bar.check_with_env(&[declaration(foo)]), Ok(true));
 }
 
 #[test]
@@ -622,7 +626,7 @@ fn pi_domain_type_acting_as_sort_via_whnf_is_accepted() {
         ),
     };
 
-    assert_eq!(definition.check_with_env(&[id]), Ok(true));
+    assert_eq!(definition.check_with_env(&[declaration(id)]), Ok(true));
 }
 
 #[test]
@@ -658,7 +662,7 @@ fn whnf_delta_then_beta_reduces_const_type() {
         Box::new(prop_to_prop),
     );
 
-    assert_eq!(expr.whnf_with_env(&[definition]), Ok(prop));
+    assert_eq!(expr.whnf_with_env(&[declaration(definition)]), Ok(prop));
 }
 
 #[test]
@@ -715,10 +719,10 @@ fn const_type_application(prop: &LeanExpr) -> LeanExpr {
 #[test]
 fn def_eq_reduces_const_application_to_prop() {
     let prop = LeanExpr::Sort(Level::Zero);
-    let env = vec![const_type_definition()];
 
     assert_eq!(
-        const_type_application(&prop).def_eq_with_env(&prop, &env),
+        const_type_application(&prop)
+            .def_eq_with_env(&prop, &[declaration(const_type_definition())]),
         Ok(true)
     );
 }
@@ -726,7 +730,6 @@ fn def_eq_reduces_const_application_to_prop() {
 #[test]
 fn def_eq_recurses_under_pi() {
     let prop = LeanExpr::Sort(Level::Zero);
-    let env = vec![const_type_definition()];
 
     let lhs = LeanExpr::Pi(
         Box::new(prop.clone()),
@@ -734,7 +737,10 @@ fn def_eq_recurses_under_pi() {
     );
     let rhs = LeanExpr::Pi(Box::new(prop.clone()), Box::new(prop.clone()));
 
-    assert_eq!(lhs.def_eq_with_env(&rhs, &env), Ok(true));
+    assert_eq!(
+        lhs.def_eq_with_env(&rhs, &[declaration(const_type_definition())]),
+        Ok(true)
+    );
 }
 
 #[test]
@@ -783,5 +789,89 @@ fn definition_rejects_pi_domain_that_is_not_a_type() {
     };
 
     assert_eq!(outer.check_with_env(&[]), Ok(true));
-    assert_eq!(definition.check_with_env(&[outer, proof]), Ok(false));
+    assert_eq!(
+        definition.check_with_env(&[declaration(outer), declaration(proof)]),
+        Ok(false)
+    );
+}
+
+#[test]
+fn axiom_constant_infers_declared_type() {
+    // axiom A : Sort 0
+    let axiom = LeanAxiom {
+        name: Name::Str(Box::new(Name::Anonymous), "A".to_string()),
+        level_params: vec![],
+        ty: LeanExpr::Sort(Level::Zero),
+    };
+
+    let env = vec![LeanDeclaration::Axiom(axiom)];
+
+    let result = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "A".to_string()),
+        vec![],
+    )
+    .infer_type_with_env_and_context(&env, &[]);
+
+    assert_eq!(result, Ok(LeanExpr::Sort(Level::Zero)));
+}
+
+#[test]
+fn axiom_is_not_reducible() {
+    // axiom A : Sort 0
+    let axiom = LeanAxiom {
+        name: Name::Str(Box::new(Name::Anonymous), "A".to_string()),
+        level_params: vec![],
+        ty: LeanExpr::Sort(Level::Zero),
+    };
+
+    let env = vec![LeanDeclaration::Axiom(axiom)];
+
+    let const_a = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "A".to_string()),
+        vec![],
+    );
+
+    assert_eq!(const_a.whnf_with_env(&env), Ok(const_a));
+}
+
+#[test]
+fn axiom_with_sort_type_checks() {
+    // axiom A : Sort 1  (a non-Prop axiom, e.g. nonTypeAxiom : Type)
+    let axiom = LeanAxiom {
+        name: Name::Str(Box::new(Name::Anonymous), "A".to_string()),
+        level_params: vec![],
+        ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Zero))),
+    };
+
+    assert_eq!(axiom.check_with_env(&[]), Ok(true));
+}
+
+#[test]
+fn axiom_whose_type_is_a_function_term_is_rejected() {
+    // constType : Sort 1 -> Sort 1 -> Sort 1   (a defined function-shaped term)
+    // axiom Bad : constType
+    let const_a = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+        vec![],
+    );
+
+    let axiom = LeanAxiom {
+        name: Name::Str(Box::new(Name::Anonymous), "Bad".to_string()),
+        level_params: vec![],
+        ty: const_a,
+    };
+
+    // infer_type(Const constType) = Pi(...), which is not a Sort.
+    let inferred = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+        vec![],
+    )
+    .infer_type_with_env_and_context(&[declaration(const_type_definition())], &[])
+    .unwrap();
+    assert!(matches!(inferred, LeanExpr::Pi(_, _)));
+
+    assert_eq!(
+        axiom.check_with_env(&[declaration(const_type_definition())]),
+        Ok(false)
+    );
 }

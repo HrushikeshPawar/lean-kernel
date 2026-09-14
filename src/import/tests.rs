@@ -1,9 +1,9 @@
 use super::*;
 use crate::export::{
-    BinderInfo, DefinitionHints, DefinitionRecord, ExprAppPayload, ExprAppRecord, ExprBVarRecord,
-    ExprConstPayload, ExprConstRecord, ExprForallPayload, ExprForallRecord, ExprLamPayload,
-    ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord, NameNumPayload,
-    NameNumRecord, NameStrPayload, NameStrRecord, Safety,
+    AxiomRecord, BinderInfo, DefinitionHints, DefinitionRecord, ExprAppPayload, ExprAppRecord,
+    ExprBVarRecord, ExprConstPayload, ExprConstRecord, ExprForallPayload, ExprForallRecord,
+    ExprLamPayload, ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord,
+    NameNumPayload, NameNumRecord, NameStrPayload, NameStrRecord, Safety,
 };
 use crate::kernel::{LeanExpr, Level, Name};
 
@@ -859,6 +859,147 @@ fn const_expression_rejects_unknown_level_in_us() {
     let error = exprs.add_const(&record, &names, &levels).unwrap_err();
 
     assert_eq!(error, "Invalid const level index: 99");
+}
+
+#[test]
+fn reconstructs_non_type_axiom() {
+    // Build NameTable:
+    //   0 = anonymous
+    //   1..8 = filler names
+    //   9 = nonTypeAxiom
+    //   10 = constType
+    let mut name_table = NameTable::new();
+
+    for i in 1..9 {
+        name_table
+            .add_str(&NameStrRecord {
+                id: i,
+                name: NameStrPayload {
+                    prefix: 0,
+                    value: format!("filler{i}"),
+                },
+            })
+            .unwrap();
+    }
+
+    name_table
+        .add_str(&NameStrRecord {
+            id: 9,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "nonTypeAxiom".to_string(),
+            },
+        })
+        .unwrap();
+
+    name_table
+        .add_str(&NameStrRecord {
+            id: 10,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "constType".to_string(),
+            },
+        })
+        .unwrap();
+
+    // Build ExprTable:
+    //   0..5 = Sort(Zero) fillers
+    //   6 = Const(constType, [])
+    let levels = LevelTable::new();
+    let mut expr_table = ExprTable::new();
+
+    for i in 0..6 {
+        expr_table
+            .add_sort(&ExprSortRecord { id: i, level: 0 }, &levels)
+            .unwrap();
+    }
+
+    expr_table
+        .add_const(
+            &ExprConstRecord {
+                id: 6,
+                constant: ExprConstPayload {
+                    name: 10,
+                    us: vec![],
+                },
+            },
+            &name_table,
+            &levels,
+        )
+        .unwrap();
+
+    // The exact final record from 011.
+    let axiom_record = AxiomRecord {
+        is_unsafe: false,
+        level_params: vec![],
+        name: 9,
+        type_id: 6,
+    };
+
+    let axiom = reconstruct_axiom(&axiom_record, &name_table, &expr_table)
+        .expect("Failed to reconstruct axiom");
+
+    assert_eq!(
+        axiom.name,
+        Name::Str(Box::new(Name::Anonymous), "nonTypeAxiom".to_string())
+    );
+
+    assert_eq!(axiom.level_params, Vec::<Name>::new());
+
+    assert_eq!(
+        axiom.ty,
+        LeanExpr::Const(
+            Name::Str(Box::new(Name::Anonymous), "constType".to_string()),
+            vec![],
+        )
+    );
+}
+
+#[test]
+fn axiom_reconstruction_rejects_unknown_type() {
+    let mut name_table = NameTable::new();
+
+    for i in 1..9 {
+        name_table
+            .add_str(&NameStrRecord {
+                id: i,
+                name: NameStrPayload {
+                    prefix: 0,
+                    value: format!("filler{i}"),
+                },
+            })
+            .unwrap();
+    }
+
+    name_table
+        .add_str(&NameStrRecord {
+            id: 9,
+            name: NameStrPayload {
+                prefix: 0,
+                value: "nonTypeAxiom".to_string(),
+            },
+        })
+        .unwrap();
+
+    let levels = LevelTable::new();
+    let mut expr_table = ExprTable::new();
+
+    for i in 0..6 {
+        expr_table
+            .add_sort(&ExprSortRecord { id: i, level: 0 }, &levels)
+            .unwrap();
+    }
+
+    let axiom_record = AxiomRecord {
+        is_unsafe: false,
+        level_params: vec![],
+        name: 9,
+        type_id: 99,
+    };
+
+    let error = reconstruct_axiom(&axiom_record, &name_table, &expr_table).unwrap_err();
+
+    assert_eq!(error, "Invalid type expression index: 99");
 }
 
 #[test]

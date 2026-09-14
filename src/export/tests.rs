@@ -243,6 +243,35 @@ fn parses_expr_const_record() {
 }
 
 #[test]
+fn parses_axiom_record() {
+    let value: Value =
+        serde_json::from_str(r#"{"axiom":{"isUnsafe":false,"levelParams":[],"name":9,"type":6}}"#)
+            .unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::Axiom(AxiomRecord {
+            is_unsafe: false,
+            level_params: vec![],
+            name: 9,
+            type_id: 6,
+        }))
+    );
+}
+
+#[test]
+fn axiom_record_with_string_is_unsafe_is_malformed() {
+    let value: Value = serde_json::from_str(
+        r#"{"axiom":{"isUnsafe":"false","levelParams":[],"name":9,"type":6}}"#,
+    )
+    .unwrap();
+
+    assert!(parse_supported_record(value).is_err());
+}
+
+#[test]
 fn parses_expr_app_record() {
     let value: Value = serde_json::from_str(r#"{"app":{"arg":7,"fn":6},"ie":8}"#).unwrap();
 
