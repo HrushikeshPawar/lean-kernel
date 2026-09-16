@@ -25,6 +25,16 @@ impl std::fmt::Display for TypeError {
     }
 }
 
+fn has_duplicate_level_params(params: &[Name]) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    for param in params {
+        if !seen.insert(param) {
+            return true;
+        }
+    }
+    false
+}
+
 fn level_in_scope(level: &Level, level_params: &[Name]) -> bool {
     match level {
         Level::Zero => true,
@@ -174,7 +184,8 @@ impl LeanExpr {
 
 impl LeanDefinition {
     pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
-        if !expr_levels_in_scope(&self.ty, &self.level_params)
+        if has_duplicate_level_params(&self.level_params)
+            || !expr_levels_in_scope(&self.ty, &self.level_params)
             || !expr_levels_in_scope(&self.value, &self.level_params)
         {
             return Ok(false);
@@ -206,7 +217,9 @@ impl LeanDefinition {
 
 impl LeanAxiom {
     pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
-        if !expr_levels_in_scope(&self.ty, &self.level_params) {
+        if has_duplicate_level_params(&self.level_params)
+            || !expr_levels_in_scope(&self.ty, &self.level_params)
+        {
             return Ok(false);
         }
 
@@ -226,7 +239,8 @@ impl LeanAxiom {
 
 impl LeanTheorem {
     pub fn check_with_env(&self, env: &[LeanDeclaration]) -> Result<bool, String> {
-        if !expr_levels_in_scope(&self.ty, &self.level_params)
+        if has_duplicate_level_params(&self.level_params)
+            || !expr_levels_in_scope(&self.ty, &self.level_params)
             || !expr_levels_in_scope(&self.value, &self.level_params)
         {
             return Ok(false);

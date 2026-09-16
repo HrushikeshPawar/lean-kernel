@@ -72,6 +72,20 @@ fn declared_universe_parameter_is_accepted() {
 }
 
 #[test]
+fn definition_rejects_duplicate_universe_parameters() {
+    let u = Name::Str(Box::new(Name::Anonymous), "u".to_string());
+
+    let definition = LeanDefinition {
+        name: Name::Str(Box::new(Name::Anonymous), "poly".to_string()),
+        level_params: vec![u.clone(), u.clone()],
+        ty: LeanExpr::Sort(Level::Succ(Box::new(Level::Param(u.clone())))),
+        value: LeanExpr::Sort(Level::Param(u)),
+    };
+
+    assert_eq!(definition.check(), Ok(false));
+}
+
+#[test]
 fn prop_to_prop_pi_has_type_type() {
     let prop = LeanExpr::Sort(Level::Zero);
 
