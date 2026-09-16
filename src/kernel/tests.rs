@@ -875,3 +875,98 @@ fn axiom_whose_type_is_a_function_term_is_rejected() {
         Ok(false)
     );
 }
+
+#[test]
+fn level_equiv_imax_zero() {
+    let one = Level::Succ(Box::new(Level::Zero));
+    let imax_one_zero = Level::IMax(Box::new(one), Box::new(Level::Zero));
+    assert!(imax_one_zero.is_equiv(&Level::Zero));
+}
+
+#[test]
+fn level_equiv_imax_succ() {
+    let zero = Level::Zero;
+    let one = Level::Succ(Box::new(Level::Zero));
+    let two = Level::Succ(Box::new(one.clone()));
+
+    // imax(0, 1) == 1
+    let imax_zero_one = Level::IMax(Box::new(zero), Box::new(one.clone()));
+    assert!(imax_zero_one.is_equiv(&one));
+
+    // imax(2, 1) == 2
+    let imax_two_one = Level::IMax(Box::new(two.clone()), Box::new(one));
+    assert!(imax_two_one.is_equiv(&two));
+}
+
+#[test]
+fn level_equiv_max_comm() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+
+    let uv = Level::Max(Box::new(u.clone()), Box::new(v.clone()));
+    let vu = Level::Max(Box::new(v), Box::new(u));
+
+    assert!(uv.is_equiv(&vu));
+}
+
+#[test]
+fn level_equiv_max_assoc() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+    let w = Level::Param(Name::Str(Box::new(Name::Anonymous), "w".to_string()));
+
+    let u_vw = Level::Max(
+        Box::new(u.clone()),
+        Box::new(Level::Max(Box::new(v.clone()), Box::new(w.clone()))),
+    );
+    let uv_w = Level::Max(
+        Box::new(Level::Max(Box::new(u), Box::new(v))),
+        Box::new(w),
+    );
+
+    assert!(u_vw.is_equiv(&uv_w));
+}
+
+#[test]
+fn level_equiv_max_idem() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let uu = Level::Max(Box::new(u.clone()), Box::new(u.clone()));
+
+    assert!(uu.is_equiv(&u));
+}
+
+#[test]
+fn level_equiv_max_absorb() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+
+    let uv = Level::Max(Box::new(u.clone()), Box::new(v.clone()));
+    let u_uv = Level::Max(Box::new(u), Box::new(uv.clone()));
+
+    assert!(u_uv.is_equiv(&uv));
+}
+
+#[test]
+fn level_equiv_succ_max_distrib() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+
+    let succ_max = Level::Succ(Box::new(Level::Max(Box::new(u.clone()), Box::new(v.clone()))));
+    let max_succ = Level::Max(
+        Box::new(Level::Succ(Box::new(u))),
+        Box::new(Level::Succ(Box::new(v))),
+    );
+
+    assert!(succ_max.is_equiv(&max_succ));
+}
+
+#[test]
+fn level_equiv_max_offset_absorb() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let succ_u = Level::Succ(Box::new(u));
+    let one = Level::Succ(Box::new(Level::Zero));
+
+    // max(1, succ(u)) == succ(u) since u >= 0 implies succ(u) >= 1
+    let max_one_succ_u = Level::Max(Box::new(one), Box::new(succ_u.clone()));
+    assert!(max_one_succ_u.is_equiv(&succ_u));
+}

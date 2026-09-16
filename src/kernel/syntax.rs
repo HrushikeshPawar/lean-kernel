@@ -1,11 +1,11 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Name {
     Anonymous,
     Str(Box<Name>, String),
     Num(Box<Name>, usize),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {
     Zero,
     Succ(Box<Level>),
