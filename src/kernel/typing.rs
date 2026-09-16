@@ -240,7 +240,7 @@ impl LeanTheorem {
 
         // The type of a theorem has to be a proposition.
         let is_prop = match inferred_ty_type.whnf_with_env(env)? {
-            LeanExpr::Sort(level) => level == Level::Zero,
+            LeanExpr::Sort(level) => level.is_equiv(&Level::Zero),
             _ => false,
         };
 

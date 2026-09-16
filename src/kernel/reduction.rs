@@ -51,14 +51,14 @@ impl LeanExpr {
         }
 
         match (self_whnf, other_whnf) {
-            (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => Ok(level1 == level2),
+            (LeanExpr::Sort(level1), LeanExpr::Sort(level2)) => Ok(level1.is_equiv(&level2)),
             (LeanExpr::BVar(index1), LeanExpr::BVar(index2)) => Ok(index1 == index2),
             (LeanExpr::Const(name1, levels1), LeanExpr::Const(name2, levels2)) => {
                 if name1 != name2 || levels1.len() != levels2.len() {
                     return Ok(false);
                 }
                 for (level1, level2) in levels1.iter().zip(levels2.iter()) {
-                    if level1 != level2 {
+                    if !level1.is_equiv(level2) {
                         return Ok(false);
                     }
                 }

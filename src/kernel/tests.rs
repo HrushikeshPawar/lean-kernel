@@ -970,3 +970,31 @@ fn level_equiv_max_offset_absorb() {
     let max_one_succ_u = Level::Max(Box::new(one), Box::new(succ_u.clone()));
     assert!(max_one_succ_u.is_equiv(&succ_u));
 }
+
+#[test]
+fn def_eq_sort_with_equivalent_levels() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+
+    let sort1 = LeanExpr::Sort(Level::Max(Box::new(u.clone()), Box::new(v.clone())));
+    let sort2 = LeanExpr::Sort(Level::Max(Box::new(v), Box::new(u)));
+
+    assert_eq!(sort1.def_eq_with_env(&sort2, &[]), Ok(true));
+}
+
+#[test]
+fn def_eq_const_with_equivalent_levels() {
+    let u = Level::Param(Name::Str(Box::new(Name::Anonymous), "u".to_string()));
+    let v = Level::Param(Name::Str(Box::new(Name::Anonymous), "v".to_string()));
+
+    let c1 = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "my_const".to_string()),
+        vec![Level::Max(Box::new(u.clone()), Box::new(v.clone()))],
+    );
+    let c2 = LeanExpr::Const(
+        Name::Str(Box::new(Name::Anonymous), "my_const".to_string()),
+        vec![Level::Max(Box::new(v), Box::new(u))],
+    );
+
+    assert_eq!(c1.def_eq_with_env(&c2, &[]), Ok(true));
+}
