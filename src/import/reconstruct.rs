@@ -1,8 +1,8 @@
 use super::{ExprTable, LevelTable, NameTable};
 use crate::export::{
     AxiomRecord, DefinitionHints, DefinitionRecord, ExprAppRecord, ExprBVarRecord, ExprConstRecord,
-    ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord,
-    NameNumRecord, NameStrRecord, Safety, TheoremRecord,
+    ExprForallRecord, ExprLamRecord, ExprSortRecord, LevelIMaxRecord, LevelMaxRecord,
+    LevelParamRecord, LevelSuccRecord, NameNumRecord, NameStrRecord, Safety, TheoremRecord,
 };
 use crate::kernel::{LeanAxiom, LeanDefinition, LeanExpr, LeanTheorem, Level, Name};
 
@@ -87,6 +87,56 @@ impl LevelTable {
             .clone();
 
         self.levels.push(Level::Param(param_name));
+        Ok(())
+    }
+
+    pub fn add_max(&mut self, record: &LevelMaxRecord) -> Result<(), String> {
+        if record.id != self.levels.len() {
+            return Err(format!(
+                "Non-sequential level record id: expected {}, got {}",
+                self.levels.len(),
+                record.id
+            ));
+        }
+
+        let lhs = self
+            .levels
+            .get(record.max[0])
+            .ok_or_else(|| format!("Invalid level index: {}", record.max[0]))?
+            .clone();
+
+        let rhs = self
+            .levels
+            .get(record.max[1])
+            .ok_or_else(|| format!("Invalid level index: {}", record.max[1]))?
+            .clone();
+
+        self.levels.push(Level::Max(Box::new(lhs), Box::new(rhs)));
+        Ok(())
+    }
+
+    pub fn add_imax(&mut self, record: &LevelIMaxRecord) -> Result<(), String> {
+        if record.id != self.levels.len() {
+            return Err(format!(
+                "Non-sequential level record id: expected {}, got {}",
+                self.levels.len(),
+                record.id
+            ));
+        }
+
+        let lhs = self
+            .levels
+            .get(record.imax[0])
+            .ok_or_else(|| format!("Invalid level index: {}", record.imax[0]))?
+            .clone();
+
+        let rhs = self
+            .levels
+            .get(record.imax[1])
+            .ok_or_else(|| format!("Invalid level index: {}", record.imax[1]))?
+            .clone();
+
+        self.levels.push(Level::IMax(Box::new(lhs), Box::new(rhs)));
         Ok(())
     }
 }

@@ -95,6 +95,24 @@ pub struct LevelParamRecord {
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct LevelMaxRecord {
+    #[serde(rename = "il")]
+    pub id: usize,
+
+    pub max: [usize; 2],
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LevelIMaxRecord {
+    #[serde(rename = "il")]
+    pub id: usize,
+
+    pub imax: [usize; 2],
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ExprSortRecord {
     #[serde(rename = "ie")]
     pub id: usize,
@@ -299,6 +317,8 @@ pub enum ExportRecord {
     NameNum(NameNumRecord),
     LevelSucc(LevelSuccRecord),
     LevelParam(LevelParamRecord),
+    LevelMax(LevelMaxRecord),
+    LevelIMax(LevelIMaxRecord),
     ExprSort(ExprSortRecord),
     ExprForall(ExprForallRecord),
     ExprLam(ExprLamRecord),

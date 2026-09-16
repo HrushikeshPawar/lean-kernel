@@ -63,6 +63,20 @@ pub fn parse_supported_record(value: Value) -> Result<Option<ExportRecord>, Stri
         return Ok(Some(ExportRecord::LevelParam(record)));
     }
 
+    if object.contains_key("max") {
+        let record =
+            serde_json::from_value::<LevelMaxRecord>(value).map_err(|error| error.to_string())?;
+
+        return Ok(Some(ExportRecord::LevelMax(record)));
+    }
+
+    if object.contains_key("imax") {
+        let record =
+            serde_json::from_value::<LevelIMaxRecord>(value).map_err(|error| error.to_string())?;
+
+        return Ok(Some(ExportRecord::LevelIMax(record)));
+    }
+
     if object.contains_key("sort") {
         let record =
             serde_json::from_value::<ExprSortRecord>(value).map_err(|error| error.to_string())?;

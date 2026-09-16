@@ -2,8 +2,9 @@ use super::*;
 use crate::export::{
     AxiomRecord, BinderInfo, DefinitionHints, DefinitionRecord, ExprAppPayload, ExprAppRecord,
     ExprBVarRecord, ExprConstPayload, ExprConstRecord, ExprForallPayload, ExprForallRecord,
-    ExprLamPayload, ExprLamRecord, ExprSortRecord, LevelParamRecord, LevelSuccRecord,
-    NameNumPayload, NameNumRecord, NameStrPayload, NameStrRecord, Safety,
+    ExprLamPayload, ExprLamRecord, ExprSortRecord, LevelIMaxRecord, LevelMaxRecord,
+    LevelParamRecord, LevelSuccRecord, NameNumPayload, NameNumRecord, NameStrPayload, NameStrRecord,
+    Safety,
 };
 use crate::kernel::{LeanExpr, Level, Name};
 
@@ -236,6 +237,112 @@ fn level_param_rejects_unknown_name() {
     let error = levels.add_param(&record, &names).unwrap_err();
 
     assert_eq!(error, "Invalid parameter name index: 99");
+}
+
+#[test]
+fn reconstructs_level_max() {
+    let mut levels = LevelTable::new();
+
+    levels
+        .add_succ(&LevelSuccRecord {
+            id: 1,
+            predecessor: 0,
+        })
+        .unwrap();
+
+    let record = LevelMaxRecord {
+        id: 2,
+        max: [1, 0],
+    };
+
+    levels.add_max(&record).unwrap();
+
+    assert_eq!(
+        levels.get(2),
+        Some(&Level::Max(
+            Box::new(Level::Succ(Box::new(Level::Zero))),
+            Box::new(Level::Zero)
+        ))
+    );
+}
+
+#[test]
+fn level_max_rejects_unknown_operand() {
+    let mut levels = LevelTable::new();
+
+    let record = LevelMaxRecord {
+        id: 1,
+        max: [0, 99],
+    };
+
+    let error = levels.add_max(&record).unwrap_err();
+    assert_eq!(error, "Invalid level index: 99");
+}
+
+#[test]
+fn level_max_rejects_non_sequential_id() {
+    let mut levels = LevelTable::new();
+
+    let record = LevelMaxRecord {
+        id: 5,
+        max: [0, 0],
+    };
+
+    let error = levels.add_max(&record).unwrap_err();
+    assert!(error.contains("Non-sequential level record id"));
+}
+
+#[test]
+fn reconstructs_level_imax() {
+    let mut levels = LevelTable::new();
+
+    levels
+        .add_succ(&LevelSuccRecord {
+            id: 1,
+            predecessor: 0,
+        })
+        .unwrap();
+
+    let record = LevelIMaxRecord {
+        id: 2,
+        imax: [1, 0],
+    };
+
+    levels.add_imax(&record).unwrap();
+
+    assert_eq!(
+        levels.get(2),
+        Some(&Level::IMax(
+            Box::new(Level::Succ(Box::new(Level::Zero))),
+            Box::new(Level::Zero)
+        ))
+    );
+}
+
+#[test]
+fn level_imax_rejects_unknown_operand() {
+    let mut levels = LevelTable::new();
+
+    let record = LevelIMaxRecord {
+        id: 1,
+        imax: [99, 0],
+    };
+
+    let error = levels.add_imax(&record).unwrap_err();
+    assert_eq!(error, "Invalid level index: 99");
+}
+
+#[test]
+fn level_imax_rejects_non_sequential_id() {
+    let mut levels = LevelTable::new();
+
+    let record = LevelIMaxRecord {
+        id: 5,
+        imax: [0, 0],
+    };
+
+    let error = levels.add_imax(&record).unwrap_err();
+    assert!(error.contains("Non-sequential level record id"));
 }
 
 #[test]

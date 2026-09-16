@@ -70,6 +70,20 @@ pub fn run(reader: impl BufRead) -> ExitCode {
                     }
                 }
 
+                export::ExportRecord::LevelMax(record) => {
+                    if let Err(error) = state.levels.add_max(&record) {
+                        eprintln!("Invalid level record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
+                export::ExportRecord::LevelIMax(record) => {
+                    if let Err(error) = state.levels.add_imax(&record) {
+                        eprintln!("Invalid level record on line {line_number}: {error}");
+                        return ExitCode::from(3);
+                    }
+                }
+
                 export::ExportRecord::ExprSort(record) => {
                     if let Err(error) = state.exprs.add_sort(&record, &state.levels) {
                         eprintln!("Invalid expression record on line {line_number}: {error}");

@@ -97,6 +97,36 @@ fn parses_level_param_record() {
 }
 
 #[test]
+fn parses_level_max_record() {
+    let value: Value = serde_json::from_str(r#"{"il":3,"max":[2,1]}"#).unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::LevelMax(LevelMaxRecord {
+            id: 3,
+            max: [2, 1],
+        }))
+    );
+}
+
+#[test]
+fn parses_level_imax_record() {
+    let value: Value = serde_json::from_str(r#"{"il":2,"imax":[1,0]}"#).unwrap();
+
+    let record = parse_supported_record(value).unwrap();
+
+    assert_eq!(
+        record,
+        Some(ExportRecord::LevelIMax(LevelIMaxRecord {
+            id: 2,
+            imax: [1, 0],
+        }))
+    );
+}
+
+#[test]
 fn parses_expr_sort_record() {
     let value: Value = serde_json::from_str(r#"{"ie":0,"sort":1}"#).unwrap();
 
